@@ -1,50 +1,38 @@
-name: Check and Lint
-"on":
-  pull_request: null
+name: Check, Test and Clippy
+
+on:
+  pull_request:
+    branches:
+      - master
   push:
     branches:
       - master
+
 jobs:
-  check:
-    name: Check
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - name: Cache cargo
+        uses: actions/cache@v3
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-  fmt:
-    name: Rustfmt
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - run: rustup component add rustfmt
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: "--all -- --check"
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          components: clippy
-          override: true
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: "${{ secrets.GITHUB_TOKEN }}"
-          args: "--all-features"
-          name: Clippy Output
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo
+
+      - name: Install toolchain
+        # hacky way to install rust. Rustup is pre-installed on runners. Calling rustup show will detect the rust-toolchain.toml, and subsequently
+        # download the needed toolchain and components.
+        run: |
+          rustup show
+
+      - name: Check
+        run: cargo check --workspace --all-features
+
+      - name: Test
+        run: cargo test --workspace --all-features
+
+      - name: Lint
+        run: cargo clippy --workspace --all-features
