@@ -18,10 +18,12 @@ mod benchmarking;
 pub mod pallet {
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
+    use pallet_staking;
+    use pallet_democracy;
 
     /// Configure the pallet by specifying the parameters and types on which it depends.
     #[pallet::config]
-    pub trait Config: frame_system::Config {
+    pub trait Config: frame_system::Config + pallet_staking::Config + pallet_democracy::Config {
         /// Because this pallet emits events, it depends on the runtime's definition of an event.
         type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
     }
@@ -97,6 +99,19 @@ pub mod pallet {
                     Ok(())
                 }
             }
+        }
+
+        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000))]
+        pub fn do_something_multiple(
+            origin: OriginFor<T>,
+            _something: u32,
+            _recv: T::AccountId,
+        ) -> DispatchResult {
+            // Check that the extrinsic was signed and get the signer.
+            // This function will return an error if the extrinsic is not signed.
+            let _sender = ensure_signed(origin)?;
+
+            Ok(())
         }
     }
 }
