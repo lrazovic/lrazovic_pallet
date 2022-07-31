@@ -16,11 +16,29 @@ pub mod pallet {
     use frame_support::pallet_prelude::*;
     use frame_support::sp_runtime::DispatchResult;
     use frame_support::traits::tokens::{ExistenceRequirement, WithdrawReasons};
-    use frame_support::traits::{Currency, Get, LockableCurrency};
+    use frame_support::traits::{Currency, Get, LockIdentifier, LockableCurrency};
     use frame_system::pallet_prelude::*;
 
+    // An identifier for a lock.
+    // Used for disambiguating different locks so that they can be individually replaced or removed.
+    const LOCKID: LockIdentifier = *b"myidlock";
+
+    // The balance of the `MainToken` type.
+    // type MainTokenBalance<T> =
+    //     <<T as Config>::MainToken as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+
+    // The balance of the `StakedTokenBalance` type.
+    // type StakedTokenBalance<T> =
+    //     <<T as Config>::StakedToken as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+
+    // impl<T as Config> From<MainTokenBalance<T>> for StakedTokenBalance<T> {
+    //     fn from(b: MainTokenBalance<T>) -> Self {
+
+    //     }
+    // }
+
     #[pallet::config]
-    pub trait Config: frame_system::Config {
+    pub trait Config: frame_system::Config + pallet_democracy::Config {
         /// Because this pallet emits events, it depends on the runtime's definition of an event.
         type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
@@ -36,9 +54,13 @@ pub mod pallet {
     pub struct Pallet<T>(_);
 
     // #[pallet::storage]
-    // pub(super) type Pools<T: Config> =
-    //    StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, T::BlockNumber), OptionQuery>;
-    // TODO: Add a Storage to save the staking ids.
+    // pub(super) type TokenToAccount<T: Config> = StorageMap<
+    //     _,
+    //     Blake2_128Concat,
+    //     T::AccountId,
+    //     (T::MainTokenBalance, T::StakedTokenBalance),
+    //     ValueQuery,
+    // >;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -68,22 +90,20 @@ pub mod pallet {
     #[pallet::call]
     impl<T: Config> Pallet<T> {
         #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-        pub fn stake(origin: OriginFor<T>, value: u32) -> DispatchResult {
+        pub fn stake(origin: OriginFor<T>, #[pallet::compact] value: u32) -> DispatchResult {
             // Check that the extrinsic was signed and get the signer.
             // This function will return an error if the extrinsic is not signed.
             let who = ensure_signed(origin)?;
 
-            let id: [u8; 8] = [1; 8];
-            // TODO: Create a REAL unique ID.
-            // Maybe PUT the id in the storage?
-
             // Lock the `MainToken` token.
-            T::MainToken::set_lock(id, &who, value.into(), WithdrawReasons::RESERVE);
+            T::MainToken::set_lock(LOCKID, &who, value.into(), WithdrawReasons::RESERVE);
             Self::deposit_event(Event::MainTokenStaked(who.clone(), value));
             // TODO: Handle errors.
 
             // Issue new `StakedToken` tokens.
             // This is infallible, but doesn’t guarantee that the entire amount is issued, for example in the case of overflow.
+
+            // let staked_value: T::StakedToken = value;
             let _ = T::StakedToken::issue(value.into());
             Self::deposit_event(Event::StakedTokenIssued(value));
 
@@ -96,14 +116,10 @@ pub mod pallet {
         }
 
         #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-        pub fn unstake(origin: OriginFor<T>, value: u32) -> DispatchResult {
+        pub fn unstake(origin: OriginFor<T>, #[pallet::compact] value: u32) -> DispatchResult {
             // Check that the extrinsic was signed and get the signer.
             // This function will return an error if the extrinsic is not signed.
             let who = ensure_signed(origin)?;
-
-            let id: [u8; 8] = [1; 8];
-            // TODO: Use a REAL unique ID.
-            // Maybe GET the id from the storage?
 
             // Withdraw the `StakedToken` tokens from the user.
             let _ = T::StakedToken::withdraw(
@@ -119,20 +135,24 @@ pub mod pallet {
             Self::deposit_event(Event::StakedTokenBurned(value));
 
             // Remove the lock from `MainToken` tokens.
-            T::MainToken::remove_lock(id, &who);
+            T::MainToken::remove_lock(LOCKID, &who);
             Self::deposit_event(Event::MainTokenUnstaked(who, value));
 
             Ok(())
         }
 
         #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-        pub fn transfer(origin: OriginFor<T>, recv: T::AccountId, value: u32) -> DispatchResult {
+        pub fn transfer(
+            origin: OriginFor<T>,
+            recv: T::AccountId,
+            #[pallet::compact] value: u32,
+        ) -> DispatchResult {
             // Check that the extrinsic was signed and get the signer.
             // This function will return an error if the extrinsic is not signed.
             let who = ensure_signed(origin)?;
 
             if who == recv {
-                // no change needed
+                // no change neededc
                 return Ok(());
             }
 
@@ -144,6 +164,34 @@ pub mod pallet {
                 ExistenceRequirement::KeepAlive,
             );
             Self::deposit_event(Event::StakedTokenTrasnferred(who, recv, value));
+
+            Ok(())
+        }
+
+        #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+        pub fn create_proposal(
+            origin: OriginFor<T>,
+            proposal_hash: T::Hash,
+            #[pallet::compact] value: u32,
+        ) -> DispatchResult {
+            // Check that the extrinsic was signed and get the signer.
+            // This function will return an error if the extrinsic is not signed.
+            let _who = ensure_signed(origin.clone())?;
+
+            let _ = pallet_democracy::Pallet::<T>::propose(origin, proposal_hash, value.into());
+
+            Ok(())
+        }
+
+        #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+        pub fn vote_proposal(
+            origin: OriginFor<T>,
+            _proposal_hash: T::Hash,
+            #[pallet::compact] _value: u32,
+        ) -> DispatchResult {
+            // Check that the extrinsic was signed and get the signer.
+            // This function will return an error if the extrinsic is not signed.
+            let _who = ensure_signed(origin)?;
 
             Ok(())
         }
