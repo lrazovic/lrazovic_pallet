@@ -18,6 +18,7 @@ pub mod pallet {
     use frame_support::traits::tokens::{ExistenceRequirement, WithdrawReasons};
     use frame_support::traits::{Currency, Get, LockIdentifier, LockableCurrency};
     use frame_system::pallet_prelude::*;
+    use pallet_democracy::ReferendumIndex;
 
     // An identifier for a lock.
     // Used for disambiguating different locks so that they can be individually replaced or removed.
@@ -81,6 +82,7 @@ pub mod pallet {
     pub enum Error<T> {
         NotEnoughMainToken,
         NotEnoughStakedToken,
+        TransferToSelf,
         // TODO: Add more errors here.
     }
 
@@ -94,6 +96,8 @@ pub mod pallet {
             // Check that the extrinsic was signed and get the signer.
             // This function will return an error if the extrinsic is not signed.
             let who = ensure_signed(origin)?;
+
+            // TODO: I need to use the pallet_staking pallet, why?
 
             // Lock the `MainToken` token.
             T::MainToken::set_lock(LOCKID, &who, value.into(), WithdrawReasons::RESERVE);
@@ -138,6 +142,8 @@ pub mod pallet {
             T::MainToken::remove_lock(LOCKID, &who);
             Self::deposit_event(Event::MainTokenUnstaked(who, value));
 
+            // TODO: I need to use the pallet_staking pallet, why?
+
             Ok(())
         }
 
@@ -151,10 +157,7 @@ pub mod pallet {
             // This function will return an error if the extrinsic is not signed.
             let who = ensure_signed(origin)?;
 
-            if who == recv {
-                // no change neededc
-                return Ok(());
-            }
+            ensure!(who != recv, Error::<T>::TransferToSelf);
 
             // Withdraw the staked token from the user.
             let _ = T::StakedToken::transfer(
@@ -178,20 +181,47 @@ pub mod pallet {
             // This function will return an error if the extrinsic is not signed.
             let _who = ensure_signed(origin.clone())?;
 
-            let _ = pallet_democracy::Pallet::<T>::propose(origin, proposal_hash, value.into());
+            pallet_democracy::Pallet::<T>::propose(origin, proposal_hash, value.into())?;
 
             Ok(())
         }
 
         #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-        pub fn vote_proposal(
+        pub fn vote_in_favor(
             origin: OriginFor<T>,
-            _proposal_hash: T::Hash,
-            #[pallet::compact] _value: u32,
+            #[pallet::compact] referendum_index: ReferendumIndex,
+            #[pallet::compact] value: u32,
         ) -> DispatchResult {
             // Check that the extrinsic was signed and get the signer.
             // This function will return an error if the extrinsic is not signed.
-            let _who = ensure_signed(origin)?;
+            let _who = ensure_signed(origin.clone())?;
+
+            let vote = pallet_democracy::AccountVote::Split {
+                aye: value.into(),
+                nay: 0_u32.into(),
+            };
+
+            pallet_democracy::Pallet::<T>::vote(origin, referendum_index, vote)?;
+
+            Ok(())
+        }
+
+        #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+        pub fn vote_in_disfavour(
+            origin: OriginFor<T>,
+            #[pallet::compact] referendum_index: ReferendumIndex,
+            #[pallet::compact] value: u32,
+        ) -> DispatchResult {
+            // Check that the extrinsic was signed and get the signer.
+            // This function will return an error if the extrinsic is not signed.
+            let _who = ensure_signed(origin.clone())?;
+
+            let vote = pallet_democracy::AccountVote::Split {
+                aye: 0_u32.into(),
+                nay: value.into(),
+            };
+
+            let _ = pallet_democracy::Pallet::<T>::vote(origin, referendum_index, vote);
 
             Ok(())
         }
