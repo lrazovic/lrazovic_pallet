@@ -1,7 +1,7 @@
 use crate as simple_pool;
 use frame_support::traits::EqualPrivilegeOnly;
 use frame_support::traits::SortedMembers;
-use frame_support::traits::{ConstU16, ConstU32, ConstU64};
+use frame_support::traits::{ConstU128, ConstU16, ConstU32, ConstU64};
 use frame_support::{ord_parameter_types, parameter_types};
 use frame_system as system;
 use frame_system::EnsureRoot;
@@ -9,6 +9,7 @@ use frame_system::EnsureSignedBy;
 use pallet_democracy;
 use pallet_scheduler;
 use sp_core::H256;
+use sp_runtime::BuildStorage;
 use sp_runtime::{
     testing::Header,
     traits::{BlakeTwo256, IdentityLookup},
@@ -16,7 +17,7 @@ use sp_runtime::{
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
-type Balance = u64;
+type Balance = u128;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -29,11 +30,12 @@ frame_support::construct_runtime!(
         TemplateModule: simple_pool::{Pallet, Call, Storage, Event<T>},
         Scheduler: pallet_scheduler::{Pallet, Call, Storage, Event<T>},
         Democracy: pallet_democracy::{Pallet, Call, Storage, Event<T>},
-        Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+        Balances: pallet_balances::<Instance1>::{Pallet, Call, Storage, Config<T>, Event<T>},
+        StakedBalances: pallet_balances::<Instance2>::{Pallet, Call, Storage, Config<T>, Event<T>},
     }
 );
 
-impl system::Config for Test {
+impl frame_system::Config for Test {
     type BaseCallFilter = frame_support::traits::Everything;
     type BlockWeights = ();
     type BlockLength = ();
@@ -47,7 +49,7 @@ impl system::Config for Test {
     type Lookup = IdentityLookup<Self::AccountId>;
     type Header = Header;
     type Event = Event;
-    type BlockHashCount = ConstU64<250>;
+    type BlockHashCount = ConstU64<258>;
     type DbWeight = ();
     type Version = ();
     type PalletInfo = PalletInfo;
@@ -74,11 +76,12 @@ impl pallet_scheduler::Config for Test {
     type NoPreimagePostponement = ();
 }
 
-impl pallet_balances::Config for Test {
+type MainToken = pallet_balances::Instance1;
+impl pallet_balances::Config<MainToken> for Test {
     type Balance = Balance;
     type DustRemoval = ();
     type Event = Event;
-    type ExistentialDeposit = ConstU64<1>;
+    type ExistentialDeposit = ConstU128<512>;
     type AccountStore = System;
     type WeightInfo = ();
     type MaxLocks = ();
@@ -86,17 +89,18 @@ impl pallet_balances::Config for Test {
     type ReserveIdentifier = [u8; 8];
 }
 
-// impl pallet_balances::Config for Test {
-// 	type MaxReserves = ();
-// 	type ReserveIdentifier = [u8; 8];
-// 	type MaxLocks = ConstU32<10>;
-// 	type Balance = u64;
-// 	type Event = Event;
-// 	type DustRemoval = ();
-// 	type ExistentialDeposit = ConstU64<1>;
-// 	type AccountStore = System;
-// 	type WeightInfo = ();
-// }
+type StakedToken = pallet_balances::Instance2;
+impl pallet_balances::Config<StakedToken> for Test {
+    type Balance = Balance;
+    type DustRemoval = ();
+    type Event = Event;
+    type ExistentialDeposit = ConstU128<1>;
+    type AccountStore = System;
+    type WeightInfo = ();
+    type MaxLocks = ();
+    type MaxReserves = ();
+    type ReserveIdentifier = [u8; 8];
+}
 
 parameter_types! {
     pub static PreimageByteDeposit: u64 = 0;
@@ -124,13 +128,13 @@ impl SortedMembers<u64> for OneToFive {
 impl pallet_democracy::Config for Test {
     type Proposal = Call;
     type Event = Event;
-    type Currency = pallet_balances::Pallet<Self>; // TODO: Modify this to use the STAKED balance.
+    type Currency = StakedBalances;
     type EnactmentPeriod = ConstU64<2>;
     type LaunchPeriod = ConstU64<2>;
     type VotingPeriod = ConstU64<2>;
     type VoteLockingPeriod = ConstU64<3>;
     type FastTrackVotingPeriod = ConstU64<2>;
-    type MinimumDeposit = ConstU64<1>;
+    type MinimumDeposit = ConstU128<1>;
     type ExternalOrigin = EnsureSignedBy<Two, u64>;
     type ExternalMajorityOrigin = EnsureSignedBy<Three, u64>;
     type ExternalDefaultOrigin = EnsureSignedBy<One, u64>;
@@ -145,7 +149,7 @@ impl pallet_democracy::Config for Test {
     type InstantOrigin = EnsureSignedBy<Six, u64>;
     type InstantAllowed = InstantAllowed;
     type Scheduler = Scheduler;
-    type MaxVotes = ConstU32<100>;
+    type MaxVotes = ConstU32<128>;
     type OperationalPreimageOrigin = EnsureSignedBy<Six, u64>;
     type PalletsOrigin = OriginCaller;
     type WeightInfo = ();
@@ -155,7 +159,7 @@ impl pallet_democracy::Config for Test {
 impl simple_pool::Config for Test {
     type Event = Event;
     type MainToken = Balances;
-    type StakedToken = Balances;
+    type StakedToken = StakedBalances;
 }
 
 // Build genesis storage according to the mock runtime.
@@ -164,13 +168,19 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
         .build_storage::<Test>()
         .unwrap();
 
-    pallet_balances::GenesisConfig::<Test> {
-        balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 2)],
+    GenesisConfig {
+        balances: BalancesConfig {
+            balances: vec![(1, 512), (2, 512), (3, 512), (4, 512), (5, 512)],
+        },
+        staked_balances: StakedBalancesConfig {
+            balances: vec![(1, 512), (2, 512), (3, 512), (4, 512), (5, 512)],
+        },
+        ..Default::default()
     }
     .assimilate_storage(&mut t)
     .unwrap();
-    system::GenesisConfig::default()
-        .build_storage::<Test>()
-        .unwrap()
-        .into()
+
+    let mut ext = sp_io::TestExternalities::new(t);
+    ext.execute_with(|| System::set_block_number(1));
+    ext
 }
