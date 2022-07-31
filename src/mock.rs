@@ -3,7 +3,6 @@ use frame_support::traits::EqualPrivilegeOnly;
 use frame_support::traits::SortedMembers;
 use frame_support::traits::{ConstU128, ConstU16, ConstU32, ConstU64};
 use frame_support::{ord_parameter_types, parameter_types};
-use frame_system as system;
 use frame_system::EnsureRoot;
 use frame_system::EnsureSignedBy;
 use pallet_democracy;
