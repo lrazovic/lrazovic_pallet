@@ -32,7 +32,7 @@ jobs:
         run: cargo check --workspace --all-features
 
       - name: Test
-        run: cargo test --workspace --all-features
+        run: cargo test --workspace
 
       - name: Lint
-        run: cargo clippy --workspace --all-features
+        run: cargo clippy --workspace
