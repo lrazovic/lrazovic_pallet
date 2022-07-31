@@ -35,19 +35,22 @@ pub mod pallet {
     #[pallet::generate_store(pub(super) trait Store)]
     pub struct Pallet<T>(_);
 
-    #[pallet::storage]
-    pub(super) type Pools<T: Config> =
-        StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, T::BlockNumber), OptionQuery>;
-    // TODO: Change the value form (T::AccountId, T::BlockNumber) to T::Token (?)
+    // #[pallet::storage]
+    // pub(super) type Pools<T: Config> =
+    //    StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, T::BlockNumber), OptionQuery>;
+    // TODO: Add a Storage to save the staking ids.
 
     #[pallet::event]
-    // #[pallet::generate_deposit(pub(super) fn deposit_event)]
+    #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
-        MainTokenStaked(u32, T::AccountId),
-        StakedTokenClaimes(u32, T::AccountId),
-        StakedTokenTransfers(u32, T::AccountId),
-        StakedTokenIssued(u32, T::AccountId),
-        StakedTokenBurned(u32, T::AccountId),
+        /// Event emitted when a claim is TRANSFERRED by the owner. [from, recv, claim]
+        MainTokenStaked(T::AccountId, u32),
+        MainTokenUnstaked(T::AccountId, u32),
+        StakedTokenTrasnferred(T::AccountId, T::AccountId, u32),
+        StakedTokenWithdrawn(T::AccountId, u32),
+        StakedTokenDeposited(T::AccountId, u32),
+        StakedTokenIssued(u32),
+        StakedTokenBurned(u32),
         // TODO: Add more events here.
     }
 
@@ -74,20 +77,20 @@ pub mod pallet {
             // TODO: Create a REAL unique ID.
             // Maybe PUT the id in the storage?
 
-            // Lock the main token.
-            let _ = T::MainToken::set_lock(id, &who, value.into(), WithdrawReasons::RESERVE);
+            // Lock the `MainToken` token.
+            T::MainToken::set_lock(id, &who, value.into(), WithdrawReasons::RESERVE);
+            Self::deposit_event(Event::MainTokenStaked(who.clone(), value));
             // TODO: Handle errors.
-            // TODO: Emit an event.
 
-            // Issue new tokens.
+            // Issue new `StakedToken` tokens.
             // This is infallible, but doesn’t guarantee that the entire amount is issued, for example in the case of overflow.
             let _ = T::StakedToken::issue(value.into());
-            // TODO: Emit an event.
+            Self::deposit_event(Event::StakedTokenIssued(value));
 
-            // Deposit the staked token to the user.
+            // Deposit the `StakedToken` token to the user.
             let _ = T::StakedToken::deposit_into_existing(&who, value.into());
+            Self::deposit_event(Event::StakedTokenDeposited(who, value));
             // TODO: Handle errors.
-            // TODO: Emit an event.
 
             Ok(())
         }
@@ -102,19 +105,22 @@ pub mod pallet {
             // TODO: Use a REAL unique ID.
             // Maybe GET the id from the storage?
 
-            // Withdraw the staked token from the user.
+            // Withdraw the `StakedToken` tokens from the user.
             let _ = T::StakedToken::withdraw(
                 &who,
                 value.into(),
                 WithdrawReasons::RESERVE,
                 ExistenceRequirement::KeepAlive,
             );
+            Self::deposit_event(Event::StakedTokenWithdrawn(who.clone(), value));
 
-            // Burn value StakedToken tokens.
+            // Burn a `value` number StakedToken tokens.
             let _ = T::StakedToken::burn(value.into());
+            Self::deposit_event(Event::StakedTokenBurned(value));
 
-            // Remove the Lock from MainToken tokens.
-            let _ = T::MainToken::remove_lock(id, &who);
+            // Remove the lock from `MainToken` tokens.
+            T::MainToken::remove_lock(id, &who);
+            Self::deposit_event(Event::MainTokenUnstaked(who, value));
 
             Ok(())
         }
@@ -137,6 +143,7 @@ pub mod pallet {
                 value.into(),
                 ExistenceRequirement::KeepAlive,
             );
+            Self::deposit_event(Event::StakedTokenTrasnferred(who, recv, value));
 
             Ok(())
         }
