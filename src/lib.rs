@@ -100,7 +100,7 @@ pub mod pallet {
             // TODO: I need to use the pallet_staking pallet, why?
 
             ensure!(
-                T::StakedToken::total_balance(&who.clone()) >= value.into(),
+                T::StakedToken::total_balance(&who) >= value.into(),
                 Error::<T>::NotEnoughMainToken
             );
 
@@ -117,11 +117,11 @@ pub mod pallet {
             Self::deposit_event(Event::StakedTokenIssued(value));
 
             // Deposit the `StakedToken` token to the user.
-            let _ = T::StakedToken::deposit_into_existing(&who.clone(), value.into());
+            let _ = T::StakedToken::deposit_into_existing(&who, value.into());
             Self::deposit_event(Event::StakedTokenDeposited(who.clone(), value));
 
             let staked_token_balance: StakedTokenBalance<T> =
-                T::StakedToken::total_balance(&who.clone()).into();
+                T::StakedToken::total_balance(&who);
             let current_block = <frame_system::Pallet<T>>::block_number();
             TokenToAccount::<T>::insert(&who, (staked_token_balance, current_block));
             // TODO: Handle errors.
@@ -136,7 +136,7 @@ pub mod pallet {
             let who = ensure_signed(origin)?;
 
             let staked_token_balance: StakedTokenBalance<T> =
-                T::StakedToken::total_balance(&who.clone()).into();
+                T::StakedToken::total_balance(&who);
             ensure!(
                 staked_token_balance >= value.into(),
                 Error::<T>::NotEnoughStakedToken
