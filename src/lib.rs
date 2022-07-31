@@ -1,8 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-/// Edit this file to define custom logic or remove it if it is not needed.
-/// Learn more about FRAME and the core library of Substrate FRAME pallets:
-/// <https://docs.substrate.io/v3/runtime/frame>
 pub use pallet::*;
 
 #[cfg(test)]
@@ -17,46 +14,48 @@ mod benchmarking;
 #[frame_support::pallet]
 pub mod pallet {
     use frame_support::pallet_prelude::*;
+    // use frame_support::sp_runtime::{traits::StaticLookup, DispatchResult};
+    use frame_support::sp_runtime::DispatchResult;
+    use frame_support::traits::tokens::{ExistenceRequirement, WithdrawReasons};
+    use frame_support::traits::{Currency, Get, LockableCurrency};
     use frame_system::pallet_prelude::*;
-    use pallet_staking;
-    use pallet_democracy;
 
-    /// Configure the pallet by specifying the parameters and types on which it depends.
     #[pallet::config]
-    pub trait Config: frame_system::Config + pallet_staking::Config + pallet_democracy::Config {
+    pub trait Config: frame_system::Config {
         /// Because this pallet emits events, it depends on the runtime's definition of an event.
         type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+        /// The Token to stake
+        type MainToken: LockableCurrency<Self::AccountId>;
+
+        /// The Staked Token
+        type StakedToken: Currency<Self::AccountId>;
     }
 
     #[pallet::pallet]
     #[pallet::generate_store(pub(super) trait Store)]
     pub struct Pallet<T>(_);
 
-    // The pallet's runtime storage items.
-    // https://docs.substrate.io/v3/runtime/storage
     #[pallet::storage]
-    #[pallet::getter(fn something)]
-    // Learn more about declaring storage items:
-    // https://docs.substrate.io/v3/runtime/storage#declaring-storage-items
-    pub type Something<T> = StorageValue<_, u32>;
+    pub(super) type Pools<T: Config> =
+        StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, T::BlockNumber), OptionQuery>;
+    // TODO: Change the value form (T::AccountId, T::BlockNumber) to T::Token (?)
 
-    // Pallets use events to inform users when important changes are made.
-    // https://docs.substrate.io/v3/runtime/events-and-errors
     #[pallet::event]
-    #[pallet::generate_deposit(pub(super) fn deposit_event)]
+    // #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
-        /// Event documentation should end with an array that provides descriptive names for event
-        /// parameters. [something, who]
-        SomethingStored(u32, T::AccountId),
+        MainTokenStaked(u32, T::AccountId),
+        StakedTokenClaimes(u32, T::AccountId),
+        StakedTokenTransfers(u32, T::AccountId),
+        // TODO: Add more events here.
     }
 
     // Errors inform users that something went wrong.
     #[pallet::error]
     pub enum Error<T> {
-        /// Error names should be descriptive.
-        NoneValue,
-        /// Errors should have helpful documentation associated with them.
-        StorageOverflow,
+        NotEnoughMainToken,
+        NotEnoughStakedToken,
+        // TODO: Add more errors here.
     }
 
     // Dispatchable functions allows users to interact with the pallet and invoke state changes.
@@ -64,52 +63,54 @@ pub mod pallet {
     // Dispatchable functions must be annotated with a weight and must return a DispatchResult.
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        /// An example dispatchable that takes a singles value as a parameter, writes the value to
-        /// storage and emits an event. This function must be dispatched by a signed extrinsic.
         #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-        pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResult {
+        pub fn stake(origin: OriginFor<T>, value: u32) -> DispatchResult {
             // Check that the extrinsic was signed and get the signer.
             // This function will return an error if the extrinsic is not signed.
-            // https://docs.substrate.io/v3/runtime/origins
             let who = ensure_signed(origin)?;
 
-            // Update storage.
-            <Something<T>>::put(something);
+            let id: [u8; 8] = [1; 8];
+            // TODO: Create a REAL unique ID.
+            // Maybe PUT the id in the storage?
 
-            // Emit an event.
-            Self::deposit_event(Event::SomethingStored(something, who));
-            // Return a successful DispatchResultWithPostInfo
+            // Lock the main token.
+            let _ = T::MainToken::set_lock(id, &who, value.into(), WithdrawReasons::RESERVE);
+            // TODO: Handle errors.
+
+            // Issue new tokens.
+            // This is infallible, but doesn’t guarantee that the entire amount is issued, for example in the case of overflow.
+            let _ = T::StakedToken::issue(value.into());
+
+            // Deposit the staked token to the user.
+            let _ = T::StakedToken::deposit_into_existing(&who, value.into());
+            // TODO: Handle errors.
+
             Ok(())
         }
 
-        /// An example dispatchable that may throw a custom error.
-        #[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
-        pub fn cause_error(origin: OriginFor<T>) -> DispatchResult {
-            let _who = ensure_signed(origin)?;
-
-            // Read a value from storage.
-            match <Something<T>>::get() {
-                // Return an error if the value has not been set.
-                None => Err(Error::<T>::NoneValue.into()),
-                Some(old) => {
-                    // Increment the value read from storage; will error in the event of overflow.
-                    let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
-                    // Update the value in storage with the incremented result.
-                    <Something<T>>::put(new);
-                    Ok(())
-                }
-            }
-        }
-
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000))]
-        pub fn do_something_multiple(
-            origin: OriginFor<T>,
-            _something: u32,
-            _recv: T::AccountId,
-        ) -> DispatchResult {
+        #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+        pub fn unstake(origin: OriginFor<T>, value: u32) -> DispatchResult {
             // Check that the extrinsic was signed and get the signer.
             // This function will return an error if the extrinsic is not signed.
-            let _sender = ensure_signed(origin)?;
+            let who = ensure_signed(origin)?;
+
+            let id: [u8; 8] = [1; 8];
+            // TODO: Use a REAL unique ID.
+            // Maybe GET the id from the storage?
+
+            // Withdraw the staked token from the user.
+            let _ = T::StakedToken::withdraw(
+                &who,
+                value.into(),
+                WithdrawReasons::RESERVE,
+                ExistenceRequirement::KeepAlive,
+            );
+
+            // Burn value StakedToken tokens.
+            let _ = T::StakedToken::burn(value.into());
+
+            // Remove the Lock from MainToken tokens.
+            let _ = T::MainToken::remove_lock(id, &who);
 
             Ok(())
         }
