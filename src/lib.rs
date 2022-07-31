@@ -14,7 +14,6 @@ mod benchmarking;
 #[frame_support::pallet]
 pub mod pallet {
     use frame_support::pallet_prelude::*;
-    // use frame_support::sp_runtime::{traits::StaticLookup, DispatchResult};
     use frame_support::sp_runtime::DispatchResult;
     use frame_support::traits::tokens::{ExistenceRequirement, WithdrawReasons};
     use frame_support::traits::{Currency, Get, LockableCurrency};
@@ -47,6 +46,8 @@ pub mod pallet {
         MainTokenStaked(u32, T::AccountId),
         StakedTokenClaimes(u32, T::AccountId),
         StakedTokenTransfers(u32, T::AccountId),
+        StakedTokenIssued(u32, T::AccountId),
+        StakedTokenBurned(u32, T::AccountId),
         // TODO: Add more events here.
     }
 
@@ -76,14 +77,17 @@ pub mod pallet {
             // Lock the main token.
             let _ = T::MainToken::set_lock(id, &who, value.into(), WithdrawReasons::RESERVE);
             // TODO: Handle errors.
+            // TODO: Emit an event.
 
             // Issue new tokens.
             // This is infallible, but doesn’t guarantee that the entire amount is issued, for example in the case of overflow.
             let _ = T::StakedToken::issue(value.into());
+            // TODO: Emit an event.
 
             // Deposit the staked token to the user.
             let _ = T::StakedToken::deposit_into_existing(&who, value.into());
             // TODO: Handle errors.
+            // TODO: Emit an event.
 
             Ok(())
         }
@@ -111,6 +115,28 @@ pub mod pallet {
 
             // Remove the Lock from MainToken tokens.
             let _ = T::MainToken::remove_lock(id, &who);
+
+            Ok(())
+        }
+
+        #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+        pub fn transfer(origin: OriginFor<T>, recv: T::AccountId, value: u32) -> DispatchResult {
+            // Check that the extrinsic was signed and get the signer.
+            // This function will return an error if the extrinsic is not signed.
+            let who = ensure_signed(origin)?;
+
+            if who == recv {
+                // no change needed
+                return Ok(());
+            }
+
+            // Withdraw the staked token from the user.
+            let _ = T::StakedToken::transfer(
+                &who,
+                &recv,
+                value.into(),
+                ExistenceRequirement::KeepAlive,
+            );
 
             Ok(())
         }
