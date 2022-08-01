@@ -36,12 +36,6 @@ pub mod pallet {
     type StakedTokenBalance<T> =
         <<T as Config>::StakedToken as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
-    // impl<T as Config> From<MainTokenBalance<T>> for StakedTokenBalance<T> {
-    //     fn from(b: MainTokenBalance<T>) -> Self {
-
-    //     }
-    // }
-
     #[pallet::config]
     pub trait Config: frame_system::Config + pallet_democracy::Config {
         /// Because this pallet emits events, it depends on the runtime's definition of an event.
@@ -155,12 +149,10 @@ pub mod pallet {
 
             ensure!(amount > 0, Error::<T>::ZeroAmount);
 
-            let staked_token_balance = T::StakedToken::free_balance(&who);
-            let expected = staked_token_balance + 1_u32.into();
-            let stake_amount: StakedTokenBalance<T> = amount.into();
-            let res = stake_amount <= expected;
-            ensure!(res, Error::<T>::NotEnoughStakedToken);
-
+            ensure!(
+                T::StakedToken::free_balance(&who) >= amount.into(),
+                Error::<T>::NotEnoughStakedToken
+            );
 
             // let current_block = <frame_system::Pallet<T>>::block_number();
             // // TODO: Change current_block >= block_number_staked to current_block >= block_number_staked + TIME_PERIOD_IN_BLOCKS
@@ -201,11 +193,10 @@ pub mod pallet {
 
             ensure!(who != recv, Error::<T>::TransferToSelf);
 
-            let staked_token_balance = T::StakedToken::free_balance(&who);
-            let expected = staked_token_balance + 1_u32.into();
-            let stake_amount: StakedTokenBalance<T> = amount.into();
-            let res = stake_amount < expected;
-            ensure!(res, Error::<T>::NotEnoughStakedToken);
+            ensure!(
+                T::StakedToken::free_balance(&who) >= amount.into(),
+                Error::<T>::NotEnoughStakedToken
+            );
 
             // Withdraw the staked token from the user.
             let _ = T::StakedToken::transfer(

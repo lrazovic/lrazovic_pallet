@@ -1,6 +1,8 @@
 use crate as simple_pool;
+use frame_support::instances::{Instance1, Instance2};
 use frame_support::traits::EqualPrivilegeOnly;
 use frame_support::traits::SortedMembers;
+use frame_support::traits::StorageMapShim;
 use frame_support::traits::{ConstU128, ConstU16, ConstU32, ConstU64};
 use frame_support::{ord_parameter_types, parameter_types};
 use frame_system::EnsureRoot;
@@ -80,9 +82,14 @@ impl pallet_balances::Config<MainToken> for Test {
     type DustRemoval = ();
     type Event = Event;
     type ExistentialDeposit = ConstU128<512>;
-    type AccountStore = System;
+    type AccountStore = StorageMapShim<
+        pallet_balances::pallet::Account<Test, Instance1>,
+        frame_system::Provider<Test>,
+        u64,
+        pallet_balances::AccountData<Balance>,
+    >;
     type WeightInfo = ();
-    type MaxLocks = ();
+    type MaxLocks = ConstU32<64>;
     type MaxReserves = ();
     type ReserveIdentifier = [u8; 8];
 }
@@ -92,8 +99,14 @@ impl pallet_balances::Config<StakedToken> for Test {
     type Balance = Balance;
     type DustRemoval = ();
     type Event = Event;
-    type ExistentialDeposit = ConstU128<1>;
-    type AccountStore = System;
+    type ExistentialDeposit = ConstU128<0>;
+    type AccountStore = StorageMapShim<
+        pallet_balances::pallet::Account<Test, Instance2>,
+        frame_system::Provider<Test>,
+        u64,
+        pallet_balances::AccountData<Balance>,
+    >;
+
     type WeightInfo = ();
     type MaxLocks = ();
     type MaxReserves = ();
