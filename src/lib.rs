@@ -113,7 +113,7 @@ pub mod pallet {
             );
             // Lock the `MainToken` token.
             let _ = T::MainToken::reserve(&who, amount.into());
-            Self::deposit_event(Event::MainTokenStaked(who.clone(), amount.into()));
+            Self::deposit_event(Event::MainTokenStaked(who.clone(), amount));
             // TODO: Handle errors.
 
             // Issue new `StakedToken` tokens.
@@ -128,7 +128,7 @@ pub mod pallet {
             let _ = T::StakedToken::deposit_into_existing(&who, amount.into());
             Self::deposit_event(Event::StakedTokenDeposited(who.clone(), amount));
             let now = <frame_system::Pallet<T>>::block_number();
-            let _ = <StakedTimes<T>>::insert(&who, now);
+            <StakedTimes<T>>::insert(&who, now);
 
             // TODO: Handle errors.
 
@@ -164,15 +164,15 @@ pub mod pallet {
                 WithdrawReasons::RESERVE,
                 ExistenceRequirement::KeepAlive,
             );
-            Self::deposit_event(Event::StakedTokenWithdrawn(who.clone(), amount.into()));
+            Self::deposit_event(Event::StakedTokenWithdrawn(who.clone(), amount));
 
             // Burn a `value` number StakedToken tokens.
             let _ = T::StakedToken::burn(amount.into());
-            Self::deposit_event(Event::StakedTokenBurned(amount.into()));
+            Self::deposit_event(Event::StakedTokenBurned(amount));
 
             // Remove the lock from `MainToken` tokens.
             T::MainToken::unreserve(&who, amount.into());
-            Self::deposit_event(Event::MainTokenUnstaked(who, amount.into()));
+            Self::deposit_event(Event::MainTokenUnstaked(who, amount));
 
             Ok(())
         }
@@ -201,7 +201,7 @@ pub mod pallet {
                 amount.into(),
                 ExistenceRequirement::KeepAlive,
             );
-            Self::deposit_event(Event::StakedTokenTrasnferred(who, recv, amount.into()));
+            Self::deposit_event(Event::StakedTokenTrasnferred(who, recv, amount));
 
             Ok(())
         }
