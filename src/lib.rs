@@ -16,13 +16,9 @@ pub mod pallet {
     use frame_support::pallet_prelude::*;
     use frame_support::sp_runtime::DispatchResult;
     use frame_support::traits::tokens::{ExistenceRequirement, WithdrawReasons};
-    use frame_support::traits::{Currency, Get, LockIdentifier, LockableCurrency};
+    use frame_support::traits::{Currency, Get, ReservableCurrency};
     use frame_support::weights::Pays;
     use frame_system::pallet_prelude::*;
-
-    // An identifier for a lock.
-    // Used for disambiguating different locks so that they can be individually replaced or removed.
-    const LOCKID: LockIdentifier = *b"myidlock";
 
     type Balance = u32;
 
@@ -36,13 +32,20 @@ pub mod pallet {
     type StakedTokenBalance<T> =
         <<T as Config>::StakedToken as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
+    // TODO: Convert StakedTokenBalance<T> to MainTokenBalance<T>
+    // impl<T: crate::Config> From <StakedTokenBalance<T>> for MainTokenBalance<T> {
+    //     fn from(staked_token_balance: StakedTokenBalance<T>) -> MainTokenBalance<T> {
+    //         staked_token_balance
+    //     }
+    // }
+
     #[pallet::config]
     pub trait Config: frame_system::Config + pallet_democracy::Config {
         /// Because this pallet emits events, it depends on the runtime's definition of an event.
         type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
         /// The "native" Token to stake
-        type MainToken: LockableCurrency<Self::AccountId>;
+        type MainToken: ReservableCurrency<Self::AccountId>;
 
         /// The "liquid" Token given after staking
         type StakedToken: Currency<Self::AccountId>;
@@ -52,15 +55,9 @@ pub mod pallet {
     #[pallet::generate_store(pub(super) trait Store)]
     pub struct Pallet<T>(_);
 
-    // TODO: Think if this structure is necessary.
-    // #[pallet::storage]
-    // pub(super) type TokenToAccount<T: Config> = StorageMap<
-    //     _,
-    //     Blake2_128Concat,
-    //     T::AccountId,
-    //     (StakedTokenBalance<T>, T::BlockNumber),
-    //     OptionQuery,
-    // >;
+    #[pallet::storage]
+    pub(super) type StakedTimes<T: Config> =
+        StorageMap<_, Blake2_128Concat, T::AccountId, T::BlockNumber, ValueQuery>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -72,19 +69,19 @@ pub mod pallet {
         MainTokenUnstaked(T::AccountId, Balance),
 
         /// Event emitted when a StakedToken is DEPOSITED to the owner. [from, amount]
-        StakedTokenDeposited(T::AccountId, StakedTokenBalance<T>),
+        StakedTokenDeposited(T::AccountId, Balance),
 
         /// Event emitted when a StakedToken is TRANSFERRED by the owner. [from, recv, amount]
-        StakedTokenTrasnferred(T::AccountId, T::AccountId, StakedTokenBalance<T>),
+        StakedTokenTrasnferred(T::AccountId, T::AccountId, Balance),
 
         /// Event emitted when a StakedToken is REMOVED from the owner. [from, amount]
-        StakedTokenWithdrawn(T::AccountId, StakedTokenBalance<T>),
+        StakedTokenWithdrawn(T::AccountId, Balance),
 
         /// Event emitted when a StakedToken is ISSUED. [amount]
-        StakedTokenIssued(StakedTokenBalance<T>),
+        StakedTokenIssued(Balance),
 
         /// Event emitted when a StakedToken is BURNED. [amount]
-        StakedTokenBurned(StakedTokenBalance<T>),
+        StakedTokenBurned(Balance),
     }
 
     // Errors inform users that something went wrong.
@@ -109,20 +106,15 @@ pub mod pallet {
             // This function will return an error if the extrinsic is not signed.
             let who = ensure_signed(origin)?;
 
-            ensure!(amount > 0, Error::<T>::ZeroAmount);
+            ensure!(amount > 0_u8.into(), Error::<T>::ZeroAmount);
             ensure!(
                 T::MainToken::free_balance(&who) >= amount.into(),
                 Error::<T>::NotEnoughMainToken
             );
-
-            // TODO: I need to use the pallet_staking pallet
-
             // Lock the `MainToken` token.
-            T::MainToken::set_lock(LOCKID, &who, amount.into(), WithdrawReasons::RESERVE);
-            Self::deposit_event(Event::MainTokenStaked(who.clone(), amount));
+            let _ = T::MainToken::reserve(&who, amount.into());
+            Self::deposit_event(Event::MainTokenStaked(who.clone(), amount.into()));
             // TODO: Handle errors.
-
-            // let staked_value: T::StakedToken = value;
 
             // Issue new `StakedToken` tokens.
             // This is infallible, but doesn’t guarantee that the entire amount is issued, for example in the case of overflow.
@@ -130,11 +122,13 @@ pub mod pallet {
             // TODO: Issue value + NUMBER % of the amount.
             // TODO: NUMBER should be configurable by governance.
             let _ = T::StakedToken::issue(amount.into());
-            Self::deposit_event(Event::StakedTokenIssued(amount.into()));
+            Self::deposit_event(Event::StakedTokenIssued(amount));
 
             // Deposit the `StakedToken` token to the user.
             let _ = T::StakedToken::deposit_into_existing(&who, amount.into());
-            Self::deposit_event(Event::StakedTokenDeposited(who, amount.into()));
+            Self::deposit_event(Event::StakedTokenDeposited(who.clone(), amount));
+            let now = <frame_system::Pallet<T>>::block_number();
+            let _ = <StakedTimes<T>>::insert(&who, now);
 
             // TODO: Handle errors.
 
@@ -154,12 +148,14 @@ pub mod pallet {
                 Error::<T>::NotEnoughStakedToken
             );
 
-            // let current_block = <frame_system::Pallet<T>>::block_number();
+            let last_stake_time = <StakedTimes<T>>::get(&who);
+            let now = <frame_system::Pallet<T>>::block_number();
+
             // // TODO: Change current_block >= block_number_staked to current_block >= block_number_staked + TIME_PERIOD_IN_BLOCKS
-            // ensure!(
-            //     current_block >= block_number_staked,
-            //     Error::<T>::TooFastUnstake
-            // );
+            ensure!(
+                now > last_stake_time + 1_u8.into(),
+                Error::<T>::TooFastUnstake
+            );
 
             // Withdraw the `StakedToken` tokens from the user.
             let _ = T::StakedToken::withdraw(
@@ -175,8 +171,8 @@ pub mod pallet {
             Self::deposit_event(Event::StakedTokenBurned(amount.into()));
 
             // Remove the lock from `MainToken` tokens.
-            T::MainToken::remove_lock(LOCKID, &who);
-            Self::deposit_event(Event::MainTokenUnstaked(who, amount));
+            T::MainToken::unreserve(&who, amount.into());
+            Self::deposit_event(Event::MainTokenUnstaked(who, amount.into()));
 
             Ok(())
         }
