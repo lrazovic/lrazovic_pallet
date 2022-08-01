@@ -19,7 +19,6 @@ pub mod pallet {
     use frame_support::traits::{Currency, Get, LockIdentifier, LockableCurrency};
     use frame_support::weights::Pays;
     use frame_system::pallet_prelude::*;
-    use pallet_democracy::ReferendumIndex;
 
     // An identifier for a lock.
     // Used for disambiguating different locks so that they can be individually replaced or removed.
@@ -108,7 +107,7 @@ pub mod pallet {
     #[pallet::call]
     impl<T: Config> Pallet<T> {
         #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-        pub fn stake(origin: OriginFor<T>, amount: Balance) -> DispatchResult {
+        pub fn stake(origin: OriginFor<T>, #[pallet::compact] amount: Balance) -> DispatchResult {
             // Check that the extrinsic was signed and get the signer.
             // This function will return an error if the extrinsic is not signed.
             let who = ensure_signed(origin)?;
@@ -145,7 +144,7 @@ pub mod pallet {
         }
 
         #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-        pub fn unstake(origin: OriginFor<T>, amount: Balance) -> DispatchResult {
+        pub fn unstake(origin: OriginFor<T>, #[pallet::compact] amount: Balance) -> DispatchResult {
             // TODO: Amount is a wide range number, use compact!
 
             // Check that the extrinsic was signed and get the signer.
@@ -214,7 +213,7 @@ pub mod pallet {
         pub fn create_proposal(
             origin: OriginFor<T>,
             proposal_hash: T::Hash,
-            weight: Balance,
+            #[pallet::compact] weight: Balance,
         ) -> DispatchResultWithPostInfo {
             // Check that the extrinsic was signed and get the signer.
             // This function will return an error if the extrinsic is not signed.
@@ -235,7 +234,7 @@ pub mod pallet {
         #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
         pub fn vote_in_favor(
             origin: OriginFor<T>,
-            #[pallet::compact] referendum_index: ReferendumIndex,
+            referendum_index: pallet_democracy::ReferendumIndex,
             #[pallet::compact] weight: Balance,
         ) -> DispatchResult {
             // Check that the extrinsic was signed and get the signer.
@@ -255,7 +254,7 @@ pub mod pallet {
         #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
         pub fn vote_in_disfavour(
             origin: OriginFor<T>,
-            #[pallet::compact] referendum_index: ReferendumIndex,
+            referendum_index: pallet_democracy::ReferendumIndex,
             #[pallet::compact] weight: Balance,
         ) -> DispatchResult {
             // Check that the extrinsic was signed and get the signer.
