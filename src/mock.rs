@@ -81,7 +81,7 @@ impl pallet_balances::Config<MainToken> for Test {
     type Balance = Balance;
     type DustRemoval = ();
     type Event = Event;
-    type ExistentialDeposit = ConstU128<512>;
+    type ExistentialDeposit = ConstU128<256>;
     type AccountStore = StorageMapShim<
         pallet_balances::pallet::Account<Test, Instance1>,
         frame_system::Provider<Test>,
@@ -184,7 +184,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
             balances: vec![(1, 512), (2, 512), (3, 512), (4, 512), (5, 512)],
         },
         staked_balances: StakedBalancesConfig {
-            balances: vec![(1, 2), (2, 2), (3, 2), (4, 2), (5, 2)],
+            balances: vec![(1, 0), (2, 0), (3, 0), (4, 0), (5, 0)],
         },
         ..Default::default()
     }
