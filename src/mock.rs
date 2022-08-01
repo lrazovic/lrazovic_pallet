@@ -171,7 +171,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
             balances: vec![(1, 512), (2, 512), (3, 512), (4, 512), (5, 512)],
         },
         staked_balances: StakedBalancesConfig {
-            balances: vec![(1, 512), (2, 512), (3, 512), (4, 512), (5, 512)],
+            balances: vec![(1, 2), (2, 2), (3, 2), (4, 2), (5, 2)],
         },
         ..Default::default()
     }

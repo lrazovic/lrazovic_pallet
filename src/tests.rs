@@ -5,7 +5,7 @@ use frame_support::{assert_noop, assert_ok};
 fn stake_works() {
     new_test_ext().execute_with(|| {
         // Dispatch a signed extrinsic.
-        assert_ok!(TemplateModule::stake(Origin::signed(1), 42));
+        assert_ok!(TemplateModule::stake(Origin::signed(1), 1));
     });
 }
 
@@ -21,10 +21,24 @@ fn stake_too_much_tokens() {
 }
 
 #[test]
+fn stake_flow_works() {
+    new_test_ext().execute_with(|| {
+        // Dispatch a signed extrinsic.
+        assert_ok!(TemplateModule::stake(Origin::signed(1), 1));
+        assert_ok!(TemplateModule::unstake(Origin::signed(1), 1));
+        assert_noop!(
+            TemplateModule::unstake(Origin::signed(1), 1024),
+            Error::<Test>::NotEnoughStakedToken
+        );
+    });
+}
+
+#[test]
 fn unstake_works() {
     new_test_ext().execute_with(|| {
         // Dispatch a signed extrinsic.
-        assert_ok!(TemplateModule::unstake(Origin::signed(1), 42));
+        assert_ok!(TemplateModule::stake(Origin::signed(1), 1));
+        assert_ok!(TemplateModule::unstake(Origin::signed(1), 1));
     });
 }
 
@@ -32,7 +46,7 @@ fn unstake_works() {
 fn transfer_basic_test() {
     new_test_ext().execute_with(|| {
         // Dispatch a signed extrinsic.
-        assert_ok!(TemplateModule::transfer(Origin::signed(1), 2, 42));
+        assert_ok!(TemplateModule::transfer(Origin::signed(1), 2, 1));
     });
 }
 
@@ -41,11 +55,11 @@ fn transfer_works() {
     new_test_ext().execute_with(|| {
         // Dispatch a signed extrinsic.
         assert_noop!(
-            TemplateModule::transfer(Origin::signed(2), 1, 768),
+            TemplateModule::transfer(Origin::signed(2), 1, 3),
             Error::<Test>::NotEnoughStakedToken
         );
-        assert_ok!(TemplateModule::transfer(Origin::signed(1), 2, 256));
-        assert_ok!(TemplateModule::transfer(Origin::signed(2), 1, 768));
+        assert_ok!(TemplateModule::transfer(Origin::signed(1), 2, 1));
+        assert_ok!(TemplateModule::transfer(Origin::signed(2), 1, 2));
     });
 }
 
@@ -90,7 +104,7 @@ fn create_proposal_works() {
         assert_ok!(TemplateModule::create_proposal(
             Origin::signed(1),
             hash.into(),
-            42
+            1
         ));
     });
 }
