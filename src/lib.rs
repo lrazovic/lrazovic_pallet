@@ -134,7 +134,7 @@ pub mod pallet {
 
             // Deposit the `StakedToken` token to the user.
             let _ = T::StakedToken::deposit_into_existing(&who, amount.into());
-            Self::deposit_event(Event::StakedTokenDeposited(who.clone(), amount.into()));
+            Self::deposit_event(Event::StakedTokenDeposited(who, amount.into()));
 
             // TODO: Handle errors.
 
