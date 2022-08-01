@@ -71,15 +71,26 @@ pub mod pallet {
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
-        /// Event emitted when a claim is TRANSFERRED by the owner. [from, recv, claim]
+        /// Event emitted when a MainToken is LOCKED by the owner. [from, amount]
         MainTokenStaked(T::AccountId, Balance),
+
+        /// Event emitted when a MainToken is UNLOCKED by the owner. [from, amount]
         MainTokenUnstaked(T::AccountId, Balance),
-        StakedTokenTrasnferred(T::AccountId, T::AccountId, StakedTokenBalance<T>),
-        StakedTokenWithdrawn(T::AccountId, StakedTokenBalance<T>),
+
+        /// Event emitted when a StakedToken is DEPOSITED to the owner. [from, amount]
         StakedTokenDeposited(T::AccountId, StakedTokenBalance<T>),
+
+        /// Event emitted when a StakedToken is TRANSFERRED by the owner. [from, recv, amount]
+        StakedTokenTrasnferred(T::AccountId, T::AccountId, StakedTokenBalance<T>),
+
+        /// Event emitted when a StakedToken is REMOVED from the owner. [from, amount]
+        StakedTokenWithdrawn(T::AccountId, StakedTokenBalance<T>),
+
+        /// Event emitted when a StakedToken is ISSUED. [amount]
         StakedTokenIssued(StakedTokenBalance<T>),
+
+        /// Event emitted when a StakedToken is BURNED. [amount]
         StakedTokenBurned(StakedTokenBalance<T>),
-        // TODO: Add more events here.
     }
 
     // Errors inform users that something went wrong.
