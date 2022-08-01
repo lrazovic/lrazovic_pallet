@@ -29,19 +29,28 @@ fn unstake_works() {
 }
 
 #[test]
-fn transfere_works() {
+fn transfer_basic_test() {
     new_test_ext().execute_with(|| {
         // Dispatch a signed extrinsic.
-        assert_ok!(TemplateModule::transfer(
-            Origin::signed(1),
-            2,
-            42
-        ));
+        assert_ok!(TemplateModule::transfer(Origin::signed(1), 2, 42));
     });
 }
 
 #[test]
-fn transfere_to_self() {
+fn transfer_works() {
+    new_test_ext().execute_with(|| {
+        // Dispatch a signed extrinsic.
+        assert_noop!(
+            TemplateModule::transfer(Origin::signed(2), 1, 768),
+            Error::<Test>::NotEnoughStakedToken
+        );
+        assert_ok!(TemplateModule::transfer(Origin::signed(1), 2, 256));
+        assert_ok!(TemplateModule::transfer(Origin::signed(2), 1, 768));
+    });
+}
+
+#[test]
+fn transfer_to_self() {
     new_test_ext().execute_with(|| {
         // Ensure the expected error is thrown when you unstake more than you have.
         assert_noop!(
@@ -87,7 +96,7 @@ fn create_proposal_works() {
 }
 
 #[test]
-fn create_proposal_not_enaugh_tokens() {
+fn create_proposal_not_enough_tokens() {
     new_test_ext().execute_with(|| {
         // Ensure the expected error is thrown when you unstake more than you have.
         let hash = [0; 32];
