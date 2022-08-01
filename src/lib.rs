@@ -47,10 +47,10 @@ pub mod pallet {
         /// Because this pallet emits events, it depends on the runtime's definition of an event.
         type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-        /// The Token to stake
+        /// The "native" Token to stake
         type MainToken: LockableCurrency<Self::AccountId>;
 
-        /// The Staked Token
+        /// The "liquid" Token given after staking
         type StakedToken: Currency<Self::AccountId>;
     }
 
@@ -58,14 +58,15 @@ pub mod pallet {
     #[pallet::generate_store(pub(super) trait Store)]
     pub struct Pallet<T>(_);
 
-    #[pallet::storage]
-    pub(super) type TokenToAccount<T: Config> = StorageMap<
-        _,
-        Blake2_128Concat,
-        T::AccountId,
-        (StakedTokenBalance<T>, T::BlockNumber),
-        ValueQuery,
-    >;
+    // TODO: Think if this structure is necessary.
+    // #[pallet::storage]
+    // pub(super) type TokenToAccount<T: Config> = StorageMap<
+    //     _,
+    //     Blake2_128Concat,
+    //     T::AccountId,
+    //     (StakedTokenBalance<T>, T::BlockNumber),
+    //     OptionQuery,
+    // >;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -97,8 +98,10 @@ pub mod pallet {
     pub enum Error<T> {
         NotEnoughMainToken,
         NotEnoughStakedToken,
+        NeverStaked,
         TransferToSelf,
-        // TODO: Add more errors here.
+        TooFastUnstake,
+        ZeroAmount,
     }
 
     // Dispatchable functions allows users to interact with the pallet and invoke state changes.
@@ -112,12 +115,13 @@ pub mod pallet {
             // This function will return an error if the extrinsic is not signed.
             let who = ensure_signed(origin)?;
 
+            ensure!(amount > 0, Error::<T>::ZeroAmount);
             ensure!(
-                T::StakedToken::total_balance(&who) >= amount.into(),
+                T::MainToken::free_balance(&who) >= amount.into(),
                 Error::<T>::NotEnoughMainToken
             );
 
-            // TODO: I need to use the pallet_staking pallet!
+            // TODO: I need to use the pallet_staking pallet
 
             // Lock the `MainToken` token.
             T::MainToken::set_lock(LOCKID, &who, amount.into(), WithdrawReasons::RESERVE);
@@ -128,6 +132,9 @@ pub mod pallet {
 
             // Issue new `StakedToken` tokens.
             // This is infallible, but doesn’t guarantee that the entire amount is issued, for example in the case of overflow.
+
+            // TODO: Issue value + NUMBER % of the amount.
+            // TODO: NUMBER should be configurable by governance.
             let _ = T::StakedToken::issue(amount.into());
             Self::deposit_event(Event::StakedTokenIssued(amount.into()));
 
@@ -135,9 +142,6 @@ pub mod pallet {
             let _ = T::StakedToken::deposit_into_existing(&who, amount.into());
             Self::deposit_event(Event::StakedTokenDeposited(who.clone(), amount.into()));
 
-            let staked_token_balance = T::StakedToken::total_balance(&who);
-            let current_block = <frame_system::Pallet<T>>::block_number();
-            TokenToAccount::<T>::insert(&who, (staked_token_balance, current_block));
             // TODO: Handle errors.
 
             Ok(())
@@ -145,17 +149,25 @@ pub mod pallet {
 
         #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
         pub fn unstake(origin: OriginFor<T>, #[pallet::compact] amount: Balance) -> DispatchResult {
-            // TODO: Amount is a wide range number, use compact!
-
             // Check that the extrinsic was signed and get the signer.
             // This function will return an error if the extrinsic is not signed.
             let who = ensure_signed(origin)?;
 
-            let staked_token_balance = T::StakedToken::total_balance(&who);
-            ensure!(
-                staked_token_balance >= amount.into(),
-                Error::<T>::NotEnoughStakedToken
-            );
+            ensure!(amount > 0, Error::<T>::ZeroAmount);
+
+            let staked_token_balance = T::StakedToken::free_balance(&who);
+            let expected = staked_token_balance + 1_u32.into();
+            let stake_amount: StakedTokenBalance<T> = amount.into();
+            let res = stake_amount <= expected;
+            ensure!(res, Error::<T>::NotEnoughStakedToken);
+
+
+            // let current_block = <frame_system::Pallet<T>>::block_number();
+            // // TODO: Change current_block >= block_number_staked to current_block >= block_number_staked + TIME_PERIOD_IN_BLOCKS
+            // ensure!(
+            //     current_block >= block_number_staked,
+            //     Error::<T>::TooFastUnstake
+            // );
 
             // Withdraw the `StakedToken` tokens from the user.
             let _ = T::StakedToken::withdraw(
@@ -174,8 +186,6 @@ pub mod pallet {
             T::MainToken::remove_lock(LOCKID, &who);
             Self::deposit_event(Event::MainTokenUnstaked(who, amount));
 
-            // TODO: I need to use the pallet_staking pallet, why?
-
             Ok(())
         }
 
@@ -191,11 +201,11 @@ pub mod pallet {
 
             ensure!(who != recv, Error::<T>::TransferToSelf);
 
-            let staked_token_balance = T::StakedToken::total_balance(&who);
-            ensure!(
-                staked_token_balance >= amount.into(),
-                Error::<T>::NotEnoughStakedToken
-            );
+            let staked_token_balance = T::StakedToken::free_balance(&who);
+            let expected = staked_token_balance + 1_u32.into();
+            let stake_amount: StakedTokenBalance<T> = amount.into();
+            let res = stake_amount < expected;
+            ensure!(res, Error::<T>::NotEnoughStakedToken);
 
             // Withdraw the staked token from the user.
             let _ = T::StakedToken::transfer(
@@ -241,6 +251,7 @@ pub mod pallet {
             // This function will return an error if the extrinsic is not signed.
             let _who = ensure_signed(origin.clone())?;
 
+            // TODO: Check if it's correct
             let vote = pallet_democracy::AccountVote::Split {
                 aye: weight.into(),
                 nay: 0_u8.into(),
@@ -261,6 +272,7 @@ pub mod pallet {
             // This function will return an error if the extrinsic is not signed.
             let _who = ensure_signed(origin.clone())?;
 
+            // TODO: Check if it's correct
             let vote = pallet_democracy::AccountVote::Split {
                 aye: 0_u8.into(),
                 nay: weight.into(),
