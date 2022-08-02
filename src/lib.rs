@@ -18,26 +18,16 @@ pub mod pallet {
     use frame_support::traits::tokens::{ExistenceRequirement, WithdrawReasons};
     use frame_support::traits::{Currency, Get, ReservableCurrency};
     use frame_support::weights::Pays;
+    use frame_support::PalletId;
+    use frame_support::sp_runtime::traits::AccountIdConversion;
     use frame_system::pallet_prelude::*;
-
-    type Balance = u32;
-
-    // Allows easy access our Pallet's `Balance` type. Comes from `Currency` interface.
-    // The balance of the `MainToken` type.
-    type MainTokenBalance<T> =
-        <<T as Config>::MainToken as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
     // Allows easy access our Pallet's `Balance` type. Comes from `Currency` interface.
     // The balance of the `StakedTokenBalance` type.
     type StakedTokenBalance<T> =
         <<T as Config>::StakedToken as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-
-    // TODO: Convert StakedTokenBalance<T> to MainTokenBalance<T>
-    // impl<T: crate::Config> From <StakedTokenBalance<T>> for MainTokenBalance<T> {
-    //     fn from(staked_token_balance: StakedTokenBalance<T>) -> MainTokenBalance<T> {
-    //         staked_token_balance
-    //     }
-    // }
+    
+        type Balance = u128;
 
     #[pallet::config]
     pub trait Config: frame_system::Config + pallet_democracy::Config {
@@ -45,10 +35,13 @@ pub mod pallet {
         type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
         /// The "native" Token to stake
-        type MainToken: ReservableCurrency<Self::AccountId>;
+        type MainToken: ReservableCurrency<Self::AccountId, Balance = Balance>;
 
         /// The "liquid" Token given after staking
-        type StakedToken: Currency<Self::AccountId>;
+        type StakedToken: Currency<Self::AccountId, Balance = Balance>;
+
+        #[pallet::constant]
+        type PalletId: Get<PalletId>;
     }
 
     #[pallet::pallet]
@@ -99,7 +92,7 @@ pub mod pallet {
         StakedTokenDeposited(T::AccountId, Balance),
 
         /// Event emitted when a StakedToken is TRANSFERRED by the owner. [from, recv, amount]
-        StakedTokenTrasnferred(T::AccountId, T::AccountId, Balance),
+        StakedTokenTrasnferred(T::AccountId, T::AccountId, StakedTokenBalance<T>),
 
         /// Event emitted when a StakedToken is REMOVED from the owner. [from, amount]
         StakedTokenWithdrawn(T::AccountId, Balance),
@@ -114,25 +107,62 @@ pub mod pallet {
     // Errors inform users that something went wrong.
     #[pallet::error]
     pub enum Error<T> {
+        ///
         NotEnoughMainToken,
+
+        ///
         NotEnoughStakedToken,
+
+        ///
         NeverStaked,
+
+        ///
         TransferToSelf,
+
+        ///
         TooFastUnstake,
+
+        ///
         TooFastStake,
+
+        ///
         ZeroAmount,
+
+        ///
         PercentageTooHigh,
+    }
+
+    #[pallet::genesis_config]
+    pub struct GenesisConfig;
+
+    #[cfg(feature = "std")]
+    impl Default for GenesisConfig {
+        fn default() -> Self {
+            Self
+        }
+    }
+
+    #[pallet::genesis_build]
+    impl<T: Config> GenesisBuild<T> for GenesisConfig {
+        fn build(&self) {
+            // Create pot account
+            let account_id: T::AccountId = T::PalletId::get().into_account_truncating();
+            let min = T::StakedToken::minimum_balance();
+            if T::StakedToken::free_balance(&account_id) < min {
+                let _ = T::StakedToken::make_free_balance_be(&account_id, min);
+            }
+        }
     }
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
         #[pallet::weight(T::DbWeight::get().writes(1))]
-        pub fn stake(origin: OriginFor<T>, #[pallet::compact] amount: Balance) -> DispatchResult {
+        pub fn stake(origin: OriginFor<T>, amount: Balance) -> DispatchResult {
             let who = ensure_signed(origin)?;
 
             ensure!(amount > 0_u8.into(), Error::<T>::ZeroAmount);
             ensure!(
-                T::MainToken::free_balance(&who) >= amount.into(),
+                T::MainToken::free_balance(&who) >= amount,
                 Error::<T>::NotEnoughMainToken
             );
 
@@ -145,15 +175,15 @@ pub mod pallet {
             );
 
             // Reserve the `MainToken` token.
-            let _ = T::MainToken::reserve(&who, amount.into());
+            let _ = T::MainToken::reserve(&who, amount);
             Self::deposit_event(Event::MainTokenStaked(who.clone(), amount));
 
             let value: u32 = Percentage::<T>::get().into();
-            let staked_token_issued = amount.checked_add(value).unwrap_or(amount);
+            let staked_token_issued = amount.checked_add(value.into()).unwrap_or(amount);
 
             // Issue new `StakedToken` tokens.
             // This is infallible, but doesn’t guarantee that the entire amount is issued, for example in the case of overflow.
-            let issued = T::StakedToken::issue(staked_token_issued.into());
+            let issued = T::StakedToken::issue(staked_token_issued);
             Self::deposit_event(Event::StakedTokenIssued(staked_token_issued));
 
             // Deposit the `StakedToken` token to the user.
@@ -169,7 +199,7 @@ pub mod pallet {
         }
 
         #[pallet::weight(T::DbWeight::get().writes(1))]
-        pub fn unstake(origin: OriginFor<T>, #[pallet::compact] amount: Balance) -> DispatchResult {
+        pub fn unstake(origin: OriginFor<T>, amount: Balance) -> DispatchResult {
             // Check that the extrinsic was signed and get the signer.
             // This function will return an error if the extrinsic is not signed.
             let who = ensure_signed(origin)?;
@@ -177,7 +207,7 @@ pub mod pallet {
             ensure!(amount > 0, Error::<T>::ZeroAmount);
 
             ensure!(
-                T::StakedToken::free_balance(&who) >= amount.into(),
+                T::StakedToken::free_balance(&who) >= amount,
                 Error::<T>::NotEnoughStakedToken
             );
 
@@ -192,18 +222,18 @@ pub mod pallet {
             // Withdraw the `StakedToken` tokens from the user.
             let _ = T::StakedToken::withdraw(
                 &who,
-                amount.into(),
+                amount,
                 WithdrawReasons::RESERVE,
                 ExistenceRequirement::KeepAlive,
             );
             Self::deposit_event(Event::StakedTokenWithdrawn(who.clone(), amount));
 
             // Burn a `value` number StakedToken tokens.
-            let _ = T::StakedToken::burn(amount.into());
+            let _ = T::StakedToken::burn(amount);
             Self::deposit_event(Event::StakedTokenBurned(amount));
 
             // Remove the lock from `MainToken` tokens.
-            T::MainToken::unreserve(&who, amount.into());
+            T::MainToken::unreserve(&who, amount);
             Self::deposit_event(Event::MainTokenUnstaked(who, amount));
 
             Ok(())
@@ -213,7 +243,7 @@ pub mod pallet {
         pub fn transfer(
             origin: OriginFor<T>,
             recv: T::AccountId,
-            #[pallet::compact] amount: Balance,
+            #[pallet::compact] amount: StakedTokenBalance<T>,
         ) -> DispatchResult {
             // Check that the extrinsic was signed and get the signer.
             // This function will return an error if the extrinsic is not signed.
@@ -222,7 +252,7 @@ pub mod pallet {
             ensure!(who != recv, Error::<T>::TransferToSelf);
 
             ensure!(
-                T::StakedToken::free_balance(&who) >= amount.into(),
+                T::StakedToken::free_balance(&who) >= amount,
                 Error::<T>::NotEnoughStakedToken
             );
 
@@ -230,7 +260,7 @@ pub mod pallet {
             let _ = T::StakedToken::transfer(
                 &who,
                 &recv,
-                amount.into(),
+                amount,
                 ExistenceRequirement::KeepAlive,
             );
             Self::deposit_event(Event::StakedTokenTrasnferred(who, recv, amount));
@@ -242,7 +272,7 @@ pub mod pallet {
         pub fn create_proposal(
             origin: OriginFor<T>,
             proposal_hash: T::Hash,
-            #[pallet::compact] weight: Balance,
+            #[pallet::compact] weight: u32,
         ) -> DispatchResultWithPostInfo {
             // Check that the extrinsic was signed and get the signer.
             // This function will return an error if the extrinsic is not signed.

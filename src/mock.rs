@@ -4,6 +4,7 @@ use frame_support::traits::EqualPrivilegeOnly;
 use frame_support::traits::SortedMembers;
 use frame_support::traits::StorageMapShim;
 use frame_support::traits::{ConstU128, ConstU16, ConstU32, ConstU64};
+use frame_support::PalletId;
 use frame_support::{ord_parameter_types, parameter_types};
 use frame_system::EnsureRoot;
 use frame_system::EnsureSignedBy;
@@ -29,6 +30,7 @@ frame_support::construct_runtime!(
         System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
         TemplateModule: simple_pool::{Pallet, Call, Storage, Event<T>},
         Scheduler: pallet_scheduler::{Pallet, Call, Storage, Event<T>},
+        // Democracy: pallet_democracy exclude_parts { Call },
         Democracy: pallet_democracy::{Pallet, Call, Storage, Event<T>},
         Balances: pallet_balances::<Instance1>::{Pallet, Call, Storage, Config<T>, Event<T>},
         StakedBalances: pallet_balances::<Instance2>::{Pallet, Call, Storage, Config<T>, Event<T>},
@@ -167,10 +169,15 @@ impl pallet_democracy::Config for Test {
     type MaxProposals = ConstU32<100>;
 }
 
+parameter_types! {
+    pub const SimplePoolId: PalletId = PalletId(*b"simplpol");
+}
+
 impl simple_pool::Config for Test {
     type Event = Event;
     type MainToken = Balances;
     type StakedToken = StakedBalances;
+    type PalletId = SimplePoolId;
 }
 
 // Build genesis storage according to the mock runtime.
