@@ -55,9 +55,36 @@ pub mod pallet {
     #[pallet::generate_store(pub(super) trait Store)]
     pub struct Pallet<T>(_);
 
+    #[pallet::type_value]
+    pub fn NeverStaked<T: Config>() -> T::BlockNumber {
+        0_u32.into()
+    }
+
     #[pallet::storage]
+    #[pallet::getter(fn staked_times)]
     pub(super) type StakedTimes<T: Config> =
-        StorageMap<_, Blake2_128Concat, T::AccountId, T::BlockNumber, ValueQuery>;
+        StorageMap<_, Blake2_128Concat, T::AccountId, T::BlockNumber, ValueQuery, NeverStaked<T>>;
+
+    #[pallet::type_value]
+    pub fn DefaultBlockTime<T: Config>() -> u32 {
+        1_u32
+    }
+
+    #[pallet::type_value]
+    pub fn DefaultPercentage<T: Config>() -> u8 {
+        1_u8
+    }
+
+    #[pallet::storage]
+    #[pallet::getter(fn percentage)]
+    /// The percentage of "liquid" Token that a user receives after staking.
+    /// X DOT gives (X + Percentage% X) of LDOT
+    pub type Percentage<T> = StorageValue<_, u8, ValueQuery, DefaultPercentage<T>>;
+
+    #[pallet::storage]
+    #[pallet::getter(fn block_to_unlock)]
+    /// The number of blocks that a user must wait before they can unstake.
+    pub type BlockToUnlock<T> = StorageValue<_, u32, ValueQuery, DefaultBlockTime<T>>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -92,18 +119,15 @@ pub mod pallet {
         NeverStaked,
         TransferToSelf,
         TooFastUnstake,
+        TooFastStake,
         ZeroAmount,
+        PercentageTooHigh,
     }
 
-    // Dispatchable functions allows users to interact with the pallet and invoke state changes.
-    // These functions materialize as "extrinsics", which are often compared to transactions.
-    // Dispatchable functions must be annotated with a weight and must return a DispatchResult.
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+        #[pallet::weight(T::DbWeight::get().writes(1))]
         pub fn stake(origin: OriginFor<T>, #[pallet::compact] amount: Balance) -> DispatchResult {
-            // Check that the extrinsic was signed and get the signer.
-            // This function will return an error if the extrinsic is not signed.
             let who = ensure_signed(origin)?;
 
             ensure!(amount > 0_u8.into(), Error::<T>::ZeroAmount);
@@ -111,31 +135,40 @@ pub mod pallet {
                 T::MainToken::free_balance(&who) >= amount.into(),
                 Error::<T>::NotEnoughMainToken
             );
-            // Lock the `MainToken` token.
+
+            let last_stake_time = <StakedTimes<T>>::get(&who);
+            let now = <frame_system::Pallet<T>>::block_number();
+
+            ensure!(
+                now >= last_stake_time + BlockToUnlock::<T>::get().into(),
+                Error::<T>::TooFastStake
+            );
+
+            // Reserve the `MainToken` token.
             let _ = T::MainToken::reserve(&who, amount.into());
             Self::deposit_event(Event::MainTokenStaked(who.clone(), amount));
-            // TODO: Handle errors.
+
+            let value: u32 = Percentage::<T>::get().into();
+            let staked_token_issued = amount.checked_add(value).unwrap_or(amount);
 
             // Issue new `StakedToken` tokens.
             // This is infallible, but doesn’t guarantee that the entire amount is issued, for example in the case of overflow.
-
-            // TODO: Issue value + NUMBER % of the amount.
-            // TODO: NUMBER should be configurable by governance.
-            let _ = T::StakedToken::issue(amount.into());
-            Self::deposit_event(Event::StakedTokenIssued(amount));
+            let issued = T::StakedToken::issue(staked_token_issued.into());
+            Self::deposit_event(Event::StakedTokenIssued(staked_token_issued));
 
             // Deposit the `StakedToken` token to the user.
-            let _ = T::StakedToken::deposit_into_existing(&who, amount.into());
-            Self::deposit_event(Event::StakedTokenDeposited(who.clone(), amount));
+            let _ = T::StakedToken::resolve_into_existing(&who, issued);
+            Self::deposit_event(Event::StakedTokenDeposited(
+                who.clone(),
+                staked_token_issued,
+            ));
             let now = <frame_system::Pallet<T>>::block_number();
             <StakedTimes<T>>::insert(&who, now);
-
-            // TODO: Handle errors.
 
             Ok(())
         }
 
-        #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+        #[pallet::weight(T::DbWeight::get().writes(1))]
         pub fn unstake(origin: OriginFor<T>, #[pallet::compact] amount: Balance) -> DispatchResult {
             // Check that the extrinsic was signed and get the signer.
             // This function will return an error if the extrinsic is not signed.
@@ -151,9 +184,8 @@ pub mod pallet {
             let last_stake_time = <StakedTimes<T>>::get(&who);
             let now = <frame_system::Pallet<T>>::block_number();
 
-            // // TODO: Change current_block >= block_number_staked to current_block >= block_number_staked + TIME_PERIOD_IN_BLOCKS
             ensure!(
-                now > last_stake_time + 1_u8.into(),
+                now >= last_stake_time + BlockToUnlock::<T>::get().into(),
                 Error::<T>::TooFastUnstake
             );
 
@@ -177,7 +209,7 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+        #[pallet::weight(T::DbWeight::get().writes(1))]
         pub fn transfer(
             origin: OriginFor<T>,
             recv: T::AccountId,
@@ -194,7 +226,7 @@ pub mod pallet {
                 Error::<T>::NotEnoughStakedToken
             );
 
-            // Withdraw the staked token from the user.
+            // Trasfer the `StakedToken` tokens from who to recv.
             let _ = T::StakedToken::transfer(
                 &who,
                 &recv,
@@ -206,7 +238,7 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::weight((10_000, Pays::Yes))]
+        #[pallet::weight((0, Pays::Yes))]
         pub fn create_proposal(
             origin: OriginFor<T>,
             proposal_hash: T::Hash,
@@ -228,49 +260,39 @@ pub mod pallet {
             Ok(Pays::No.into())
         }
 
-        #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-        pub fn vote_in_favor(
-            origin: OriginFor<T>,
-            referendum_index: pallet_democracy::ReferendumIndex,
-            #[pallet::compact] weight: Balance,
-        ) -> DispatchResult {
-            // Check that the extrinsic was signed and get the signer.
-            // This function will return an error if the extrinsic is not signed.
-            let _who = ensure_signed(origin.clone())?;
+        #[pallet::weight(0)]
+        pub fn change_percentage(origin: OriginFor<T>, percentage: u8) -> DispatchResult {
+            // In this way only the ROOT council can call the function!
+            ensure_root(origin)?;
 
-            // TODO: Check if it's correct
-            let vote = pallet_democracy::AccountVote::Split {
-                aye: weight.into(),
-                nay: 0_u8.into(),
-            };
+            ensure!(percentage <= 100, Error::<T>::PercentageTooHigh);
 
-            pallet_democracy::Pallet::<T>::vote(origin, referendum_index, vote)?;
+            Percentage::<T>::put(percentage);
 
             Ok(())
         }
 
-        #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-        pub fn vote_in_disfavour(
+        #[pallet::weight(0)]
+        pub fn change_block_time(
             origin: OriginFor<T>,
-            referendum_index: pallet_democracy::ReferendumIndex,
-            #[pallet::compact] weight: Balance,
+            #[pallet::compact] block_time: u32,
         ) -> DispatchResult {
-            // Check that the extrinsic was signed and get the signer.
-            // This function will return an error if the extrinsic is not signed.
-            let _who = ensure_signed(origin.clone())?;
+            // In this way only the ROOT council can call the function!
+            ensure_root(origin)?;
 
-            // TODO: Check if it's correct
-            let vote = pallet_democracy::AccountVote::Split {
-                aye: 0_u8.into(),
-                nay: weight.into(),
-            };
-
-            let _ = pallet_democracy::Pallet::<T>::vote(origin, referendum_index, vote);
+            BlockToUnlock::<T>::put(block_time);
 
             Ok(())
         }
+    }
 
-        // TODO: let who = ensure_root(origin.clone())?;
-        // In this way only the ROOT council can call the function!
+    #[pallet::hooks]
+    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+        fn on_finalize(n: T::BlockNumber) {
+            if n % 100u32.into() == frame_support::sp_runtime::traits::Zero::zero() {
+                // Do something every 100 blocks
+                // TODO: From the POT send the tokens to the users
+            };
+        }
     }
 }
