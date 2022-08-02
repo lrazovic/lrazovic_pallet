@@ -25,7 +25,12 @@ fn restake_works() {
     new_test_ext().execute_with(|| {
         // Dispatch a signed extrinsic.
         assert_ok!(TemplateModule::stake(Origin::signed(1), 1));
+        let block_number = System::block_number();
+        System::set_block_number(block_number + 1);
         assert_ok!(TemplateModule::stake(Origin::signed(1), 1));
+        let block_number = System::block_number();
+        System::set_block_number(block_number + 1);
+        assert_ok!(TemplateModule::unstake(Origin::signed(1), 2));
         // TODO: check that the balance is updated
     });
 }
@@ -36,7 +41,7 @@ fn unstake_works() {
         // Dispatch a signed extrinsic.
         assert_ok!(TemplateModule::stake(Origin::signed(1), 1));
         let block_number = System::block_number();
-        System::set_block_number(block_number + 2);
+        System::set_block_number(block_number + 3);
         assert_ok!(TemplateModule::unstake(Origin::signed(1), 1));
     });
 }
@@ -76,7 +81,7 @@ fn complex_transfer_works() {
         assert_ok!(TemplateModule::transfer(Origin::signed(1), 2, 42));
         assert_ok!(TemplateModule::transfer(Origin::signed(2), 1, 2));
         let block_number = System::block_number();
-        System::set_block_number(block_number + 2);
+        System::set_block_number(block_number + 1);
         assert_ok!(TemplateModule::unstake(Origin::signed(2), 40));
     });
 }
@@ -100,6 +105,15 @@ fn transfer_too_much() {
             TemplateModule::transfer(Origin::signed(1), 2, 1024),
             Error::<Test>::NotEnoughStakedToken
         );
+    });
+}
+
+#[test]
+fn percentage_works() {
+    new_test_ext().execute_with(|| {
+        // Ensure the expected error is thrown when you unstake more than you have.
+        assert_ok!(TemplateModule::stake(Origin::signed(1), 100));
+        assert_ok!(TemplateModule::transfer(Origin::signed(1), 2, 101));
     });
 }
 
@@ -137,5 +151,23 @@ fn create_proposal_not_enough_tokens() {
             TemplateModule::create_proposal(Origin::signed(1), hash.into(), 1024),
             Error::<Test>::NotEnoughStakedToken
         );
+    });
+}
+
+#[test]
+fn change_percentage() {
+    new_test_ext().execute_with(|| {
+        // Ensure the expected error is thrown when you unstake more than you have.
+        assert_ok!(TemplateModule::stake(Origin::signed(1), 100));
+        assert_ok!(TemplateModule::transfer(Origin::signed(1), 2, 101));
+        assert_noop!(
+            TemplateModule::transfer(Origin::signed(1), 2, 102),
+            Error::<Test>::NotEnoughStakedToken
+        );
+        assert_ok!(TemplateModule::change_percentage(Origin::root(), 5));
+        let block_number = System::block_number();
+        System::set_block_number(block_number + 1);
+        assert_ok!(TemplateModule::stake(Origin::signed(1), 100));
+        assert_ok!(TemplateModule::transfer(Origin::signed(1), 2, 105));
     });
 }

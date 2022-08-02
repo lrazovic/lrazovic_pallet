@@ -90,7 +90,7 @@ impl pallet_balances::Config<MainToken> for Test {
     >;
     type WeightInfo = ();
     type MaxLocks = ConstU32<64>;
-    type MaxReserves = ();
+    type MaxReserves = ConstU32<64>;
     type ReserveIdentifier = [u8; 8];
 }
 
@@ -109,13 +109,13 @@ impl pallet_balances::Config<StakedToken> for Test {
 
     type WeightInfo = ();
     type MaxLocks = ();
-    type MaxReserves = ();
+    type MaxReserves = ConstU32<64>;
     type ReserveIdentifier = [u8; 8];
 }
 
 parameter_types! {
     pub static PreimageByteDeposit: u64 = 0;
-    pub static InstantAllowed: bool = false;
+    pub static InstantAllowed: bool = true;
 }
 
 ord_parameter_types! {
