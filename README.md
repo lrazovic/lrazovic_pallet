@@ -3,7 +3,10 @@
 [![Check, Test and Clippy](https://github.com/lrazovic/lrazovic_pallet/actions/workflows/check-and-lint.yaml/badge.svg)](https://github.com/lrazovic/lrazovic_pallet/actions/workflows/check-and-lint.yaml)
 
 ## Idea
-A user can stake a token (e.g. a DOT) and receive a liquid token (e.g. a LDOT). The user can trade/transfer the LDOT, hold it to receive more LDOTs every X blocks or propose and vote changes.
+The aim of this project is to create a pallet to manage a liquidity pool. A user can stake a token (e.g. a DOT) and receive a liquid token (e.g. a LDOT). The user can:
++ Trade/transfer the LDOT
++ Hold it to receive more LDOTs every X blocks
++ Propose and vote changes about economic paramenters of the pool.
 
 > **Note** <br>
 > What is a liquidity pool? A liquidity pool is a digital pile of cryptocurrency locked in a smart contract. This results in creating liquidity for faster transactions. A major component of a liquidity pool are automated market makers (AMMs). An AMM is a protocol that uses liquidity pools to allow digital assets to be traded in an automated way rather than through a traditional market of buyers and sellers.
@@ -13,16 +16,22 @@ A user can stake a token (e.g. a DOT) and receive a liquid token (e.g. a LDOT). 
 > **Warning** <br>
 > This is an educational purpose project only. Should NOT be used in a real production system.
 
-## Build and test
+## Build and test (as a single pallet)
 
 1. Run tests with `cargo test`
 2. Build with `cargo build --release`
+
+## Build and test
+1. Clone [this modified](https://github.com/lrazovic/substrate-node) version of `substrate-node-template`.
+2. Build with `cargo build --release`
+3. Run the binary with `./target/release/node-template --dev`
+4. Interact with the node using [polkadot.js](https://polkadot.js.org/apps/) and/or with [this modified](https://github.com/lrazovic/substrate-node) version of `substrate-front-end-template` (Useful to see the balance in LDOT).
 
 ## Pallet used
 
 + `pallet_scheduler`
 + `pallet_democracy`
-+ Two istances of `pallet_balances `
++ Two istances of `pallet_balances`
 + 
 
 ## Future improvements
