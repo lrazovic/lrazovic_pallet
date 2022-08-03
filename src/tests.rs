@@ -80,8 +80,6 @@ fn complex_transfer_works() {
         assert_ok!(TemplateModule::stake(Origin::signed(1), 42));
         assert_ok!(TemplateModule::transfer(Origin::signed(1), 2, 42));
         assert_ok!(TemplateModule::transfer(Origin::signed(2), 1, 2));
-        let block_number = System::block_number();
-        System::set_block_number(block_number + 1);
         assert_ok!(TemplateModule::unstake(Origin::signed(2), 40));
     });
 }
@@ -123,32 +121,6 @@ fn unstake_too_much_tokens() {
         // Ensure the expected error is thrown when you unstake more than you have.
         assert_noop!(
             TemplateModule::unstake(Origin::signed(1), 1024),
-            Error::<Test>::NotEnoughStakedToken
-        );
-    });
-}
-
-#[test]
-fn create_proposal_works() {
-    new_test_ext().execute_with(|| {
-        // Dispatch a signed extrinsic.
-        let hash = [0; 32];
-        assert_ok!(TemplateModule::stake(Origin::signed(1), 42));
-        assert_ok!(TemplateModule::create_proposal(
-            Origin::signed(1),
-            hash.into(),
-            1
-        ));
-    });
-}
-
-#[test]
-fn create_proposal_not_enough_tokens() {
-    new_test_ext().execute_with(|| {
-        // Ensure the expected error is thrown when you unstake more than you have.
-        let hash = [0; 32];
-        assert_noop!(
-            TemplateModule::create_proposal(Origin::signed(1), hash.into(), 1024),
             Error::<Test>::NotEnoughStakedToken
         );
     });
