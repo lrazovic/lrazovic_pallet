@@ -70,6 +70,27 @@ The following is a summary of `src/lib.rs`
 + Using `pallet_democracy` the user can create a proposal paying in `Currency` (so the liquid token, not in `ReservableCurrency`), as [shown here](https://github.com/lrazovic/substrate-node/blob/main/runtime/src/lib.rs#L361).
 + Through governance then users holding the liquid token can vote to use `change_percentage(percentage)` and `change_block_time(block_time)` to vary the economic parameters of the pool.
 + As an incentive not to transfer liquid tokens, new tokens are issued every X blocks and distributed to users using logic inside the `on_finalize` hook.
++ At the moment you can only *propose* changes using the liquid token, but to *vote* you have to use the Main Token. To vote using the Liquid Token I would have to create a wrapper for `pallet_democracy`, but I would lose the integration with [polkadot.js](https://polkadot.js.org/apps/) Governance tab, and I did not know if this was correct or not. A code example: 
+```rust
+pub fn vote_in_favor(
+    origin: OriginFor<T>,
+    #[pallet::compact] referendum_index: ReferendumIndex,
+    #[pallet::compact] weight: StakedTokenBalance<T>,
+) -> DispatchResult {
+    // Check that the extrinsic was signed and get the signer.
+    // This function will return an error if the extrinsic is not signed.
+    let _who = ensure_signed(origin.clone())?;
+
+    let vote = pallet_democracy::AccountVote::Split {
+        aye: weight.into(),
+        nay: 0_u8.into(),
+    };
+
+    pallet_democracy::Pallet::<T>::vote(origin, referendum_index, vote)?;
+
+    Ok(())
+}
+```
 
 > **Warning** <br>
 > Of course, I am aware that it makes no economic sense, but I had fun experimenting by combining various pallets.
