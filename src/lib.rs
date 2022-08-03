@@ -67,12 +67,12 @@ pub mod pallet {
     #[pallet::getter(fn percentage)]
     /// The percentage of "liquid" Token that a user receives after staking.
     /// X DOT gives (X + Percentage% X) of LDOT
-    pub type Percentage<T> = StorageValue<_, u8, ValueQuery, DefaultPercentage<T>>;
+    pub type Percentage<T: Config> = StorageValue<_, u8, ValueQuery, DefaultPercentage<T>>;
 
     #[pallet::storage]
     #[pallet::getter(fn block_to_unlock)]
     /// The number of blocks that a user must wait before they can unstake.
-    pub type BlockToUnlock<T> = StorageValue<_, u32, ValueQuery, DefaultBlockTime<T>>;
+    pub type BlockToUnlock<T: Config> = StorageValue<_, u32, ValueQuery, DefaultBlockTime<T>>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
