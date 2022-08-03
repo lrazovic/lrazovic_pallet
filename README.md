@@ -32,6 +32,8 @@ The aim of this project is to create a pallet to manage a liquidity pool. A user
 
 ## Anatomy
 
+The following is a summary of `src/lib.rs`
+
 ### Exposed extrinsics
 
 - `stake(amount: u128)`
