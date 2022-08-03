@@ -30,6 +30,7 @@ The aim of this project is to create a pallet to manage a liquidity pool. A user
 3. Run the binary with `./target/release/node-template --dev`
 4. Interact with the node using [polkadot.js](https://polkadot.js.org/apps/) and/or with [this modified](https://github.com/lrazovic/substrate-node) version of `substrate-front-end-template` (Useful to see the balance in LDOT).
 
+
 ## Anatomy
 
 The following is a summary of `src/lib.rs`
@@ -59,13 +60,20 @@ The following is a summary of `src/lib.rs`
 - `type StakedToken: Currency<Self::AccountId, Balance = u128>`
 - `type PalletId: Get<PalletId>`
 
-## Pallet used
+## Implementation and simplifications
 
-- `pallet_scheduler`
-- `pallet_democracy`
-- Two istances of `pallet_balances`
-- Two istances of `pallet_collective`
--
++ Instead of sending the funds via `pallet-staking` I used a `ReservableCurrency` to handle the "main token", so I can do a `reserve` to lock the funds and give a `Currency` representing the Liquid Token in return.
++ When the user calls `stake(amount)` an `amount` of `ReservableCurrency` is reserved and a `(amount + n%)` of `Currency` is created and deposited to the user.
++ The user cannot call `stake(amount)` again before a number of blocks (`BlockToUnlock`).
++ The user cannot call `unstake(amount)` before a number of blocks (`BlockToUnlock`).
++ After a number of blocks (`BlockToUnlock`) the user can call `unstake(amount)` to burn an `amount` of `Currency` and unreserve his portion of `ReservableCurrency`.
++ The user can transfer using `ransfer(recv, amount)` part of his `Currency`
++ Using `pallet_democracy` the user can create a proposal paying in `Currency` (so the liquid token, not in `ReservableCurrency`), as [shown here](https://github.com/lrazovic/substrate-node/blob/main/runtime/src/lib.rs#L361).
++ Through governance then users holding the liquid token can vote to use `change_percentage(percentage)` and `change_block_time(block_time)` to vary the economic parameters of the pool.
++ As an incentive not to transfer liquid tokens, new tokens are issued every X blocks and distributed to users using logic inside the `on_finalize` hook.
+
+> **Warning** <br>
+> Of course, I am aware that it makes no economic sense, but I had fun experimenting by combining various pallets.
 
 ## Future improvements
 
