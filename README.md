@@ -28,7 +28,6 @@ The aim of this project is to create a pallet to manage a liquidity pool. A user
 4. Interact with the node using [polkadot.js](https://polkadot.js.org/apps/) and/or with [this modified](https://github.com/lrazovic/substrate-node) version of `substrate-front-end-template` (Useful to see the balance in LDOT).
 
 ## Anatomy
-
 ### Exposed extrinsics
 + stake(amount: u128)
 + unstake(amount: u128)
