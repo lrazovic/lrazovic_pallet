@@ -28,26 +28,31 @@ The aim of this project is to create a pallet to manage a liquidity pool. A user
 4. Interact with the node using [polkadot.js](https://polkadot.js.org/apps/) and/or with [this modified](https://github.com/lrazovic/substrate-node) version of `substrate-front-end-template` (Useful to see the balance in LDOT).
 
 ## Anatomy
+
 ### Exposed extrinsics
-+ stake(amount: u128)
-+ unstake(amount: u128)
-+ transfer(recv: T::AccountId, amount: u128)
-+ change_percentage(percentage: u8)
-+ change_block_time(block_time: u32)
+
++ `stake(amount: u128)`
++ `unstake(amount: u128)`
++ `transfer(recv: T::AccountId, amount: u128)`
++ `change_percentage(percentage: u8)`
++ `change_block_time(block_time: u32)`
 
 ### Hooks
-+ on_finalize()
+
++ `on_finalize()`
 
 ### Storage
-+ BlockToUnlock<T> = StorageValue<_, u32, ValueQuery, DefaultBlockTime<T>>
-+ Percentage<T> = StorageValue<_, u8, ValueQuery, DefaultPercentage<T>>
-+ StakedTimes<T> = StorageMap<_, Blake2_128Concat, T::AccountId, T::BlockNumber, OptionQuery>
+
++ `BlockToUnlock<T> = StorageValue<_, u32, ValueQuery, DefaultBlockTime<T>>`
++ `Percentage<T> = StorageValue<_, u8, ValueQuery, DefaultPercentage<T>>`
++ `StakedTimes<T> = StorageMap<_, Blake2_128Concat, T::AccountId, T::BlockNumber, OptionQuery>`
 
 ### Config
-+ type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>
-+ type MainToken: ReservableCurrency<Self::AccountId, Balance = u128>
-+ type StakedToken: Currency<Self::AccountId, Balance = u128>
-+ type PalletId: Get<PalletId>
+
++ `type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>`
++ `type MainToken: ReservableCurrency<Self::AccountId, Balance = u128>`
++ `type StakedToken: Currency<Self::AccountId, Balance = u128>`
++ `type PalletId: Get<PalletId>`
 
 ## Pallet used
 
