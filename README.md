@@ -28,10 +28,9 @@ The aim of this project is to create a pallet to manage a liquidity pool. A user
 1. Clone [this modified](https://github.com/lrazovic/substrate-node) version of `substrate-node-template`.
 2. Build with `cargo build --release`
 3. Run the binary with `./target/release/node-template --dev`
-4. Interact with the node using [polkadot.js](https://polkadot.js.org/apps/) and/or with [this modified](https://github.com/lrazovic/substrate-node) version of `substrate-front-end-template` (Useful to see the balance in LDOT).
+4. Interact with the node using [polkadot.js](https://polkadot.js.org/apps/) and/or with [this modified](https://github.com/lrazovic/substrate-front-end) version of `substrate-front-end-template` (Useful to see the balance in LDOT).
 
-
-## Anatomy
+## Anatomy of the pallet
 
 The following is a summary of `src/lib.rs`
 
@@ -53,7 +52,7 @@ The following is a summary of `src/lib.rs`
 - `Percentage<T> = StorageValue<_, u8, ValueQuery, DefaultPercentage<T>>`
 - `StakedTimes<T> = StorageMap<_, Blake2_128Concat, T::AccountId, T::BlockNumber, OptionQuery>`
 
-### Config
+### Config
 
 - `type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>`
 - `type MainToken: ReservableCurrency<Self::AccountId, Balance = u128>`
