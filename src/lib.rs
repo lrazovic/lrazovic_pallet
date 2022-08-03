@@ -172,8 +172,14 @@ pub mod pallet {
             let _ = T::MainToken::reserve(&who, amount);
             Self::deposit_event(Event::MainTokenStaked(who.clone(), amount));
 
-            let value: u32 = Percentage::<T>::get().into();
-            let staked_token_issued = amount.checked_add(value.into()).unwrap_or(amount);
+            let percentage = Percentage::<T>::get().into();
+            let bonus_token = amount
+                .checked_div(100)
+                .unwrap_or(0)
+                .checked_mul(percentage)
+                .unwrap_or(amount);
+
+            let staked_token_issued = amount.checked_add(bonus_token).unwrap_or(amount);
 
             // Issue new `StakedToken` tokens.
             // This is infallible, but doesn’t guarantee that the entire amount is issued, for example in the case of overflow.
@@ -298,19 +304,26 @@ pub mod pallet {
     #[pallet::hooks]
     impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
         fn on_finalize(n: T::BlockNumber) {
-            // 10 blocks are hardcoded for simplification but can be any value chosen by the governance
-            if n % 10u8.into() == frame_support::sp_runtime::traits::Zero::zero() {
+            // 5 blocks are hardcoded for simplification but can be any value chosen by the governance
+            if n % 5u8.into() == frame_support::sp_runtime::traits::Zero::zero() {
                 for who in <StakedTimes<T>>::iter_keys() {
                     if <StakedTimes<T>>::get(&who).is_some() {
                         let pot_address = Self::account_id();
-                        let amount = T::StakedToken::free_balance(&who).
+                        let amount = T::StakedToken::free_balance(&who);
+                        let percentage = Percentage::<T>::get().into();
+                        // Use checked math to perform operations, if something goes wrong, send 0 tokens.
+                        let gift = amount
+                            .checked_div(100)
+                            .unwrap_or(0)
+                            .checked_mul(percentage)
+                            .unwrap_or(0);
                         let _ = T::StakedToken::transfer(
                             &pot_address,
                             &who,
-                            777,
+                            gift,
                             ExistenceRequirement::KeepAlive,
                         );
-                        Self::deposit_event(Event::StakedTokenTransferred(pot_address, who, 777));
+                        Self::deposit_event(Event::StakedTokenTransferred(pot_address, who, gift));
                     }
                 }
             };
