@@ -4,14 +4,14 @@
 
 ## Idea
 
-The aim of this project is to create a pallet to manage a liquidity pool. A user can stake a token (e.g. a DOT) and receive a liquid token (e.g. a LDOT). The user can:
+This project aims to create a pallet to manage a liquidity pool. A user can stake a token (e.g. a DOT) and receive a liquid token (e.g. LDOT). The user can:
 
 - Trade/transfer the LDOT
 - Hold it to receive more LDOTs every X blocks
-- Propose and vote changes about economic paramenters of the pool.
+- Propose and vote changes about the economic parameters of the pool.
 
 > **Note** <br>
-> What is a liquidity pool? A liquidity pool is a digital pile of cryptocurrency locked in a smart contract. This results in creating liquidity for faster transactions. A major component of a liquidity pool are automated market makers (AMMs). An AMM is a protocol that uses liquidity pools to allow digital assets to be traded in an automated way rather than through a traditional market of buyers and sellers.
+> What is a liquidity pool? A liquidity pool is a digital pile of cryptocurrency locked in a smart contract. This results in creating liquidity for faster transactions. A major component of a liquidity pool is automated market makers (AMMs). An AMM is a protocol that uses liquidity pools to allow digital assets to be traded in an automated way rather than through a traditional market of buyers and sellers.
 >
 > [Source](https://www.coindesk.com/learn/what-are-liquidity-pools/)
 
@@ -63,10 +63,10 @@ The following is a summary of `src/lib.rs`
 
 + Instead of sending the funds via `pallet-staking` I used a `ReservableCurrency` to handle the "main token", so I can do a `reserve` to lock the funds and give a `Currency` representing the Liquid Token in return.
 + When the user calls `stake(amount)` an `amount` of `ReservableCurrency` is reserved and a `(amount + n%)` of `Currency` is created and deposited to the user.
-+ The user cannot call `stake(amount)` again before a number of blocks (`BlockToUnlock`).
-+ The user cannot call `unstake(amount)` before a number of blocks (`BlockToUnlock`).
-+ After a number of blocks (`BlockToUnlock`) the user can call `unstake(amount)` to burn an `amount` of `Currency` and unreserve his portion of `ReservableCurrency`.
-+ The user can transfer using `ransfer(recv, amount)` part of his `Currency`
++ The user cannot call `stake(amount)` again before several blocks (`BlockToUnlock`).
++ The user cannot call `unstake(amount)` before some blocks (`BlockToUnlock`).
++ After several blocks (`BlockToUnlock`) the user can call `unstake(amount)` to burn an `amount` of `Currency` and unreserve his portion of `ReservableCurrency`.
++ The user can transfer using `transfer(recv, amount)` part of his `Currency`
 + Using `pallet_democracy` the user can create a proposal paying in `Currency` (so the liquid token, not in `ReservableCurrency`), as [shown here](https://github.com/lrazovic/substrate-node/blob/main/runtime/src/lib.rs#L361).
 + Through governance then users holding the liquid token can vote to use `change_percentage(percentage)` and `change_block_time(block_time)` to vary the economic parameters of the pool.
 + As an incentive not to transfer liquid tokens, new tokens are issued every X blocks and distributed to users using logic inside the `on_finalize` hook.

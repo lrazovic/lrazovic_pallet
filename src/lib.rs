@@ -71,7 +71,7 @@ pub mod pallet {
 
     #[pallet::storage]
     #[pallet::getter(fn block_to_unlock)]
-    /// The number of blocks that a user must wait before they can unstake.
+    /// The number of blocks that a user must wait before they can stake/unstake.
     pub type BlockToUnlock<T: Config> = StorageValue<_, u32, ValueQuery, DefaultBlockTime<T>>;
 
     #[pallet::event]
@@ -259,7 +259,12 @@ pub mod pallet {
 
             // Trasfer the `StakedToken` tokens from who to recv.
             let _ = T::StakedToken::transfer(&who, &recv, amount, ExistenceRequirement::KeepAlive);
-            Self::deposit_event(Event::StakedTokenTransferred(who, recv, amount));
+            Self::deposit_event(Event::StakedTokenTransferred(who.clone(), recv, amount));
+
+            if T::StakedToken::free_balance(&who) == 0_u32.into() {
+                // Remove the last_block_time value from the map.
+                <StakedTimes<T>>::remove(&who);
+            }
 
             Ok(())
         }
@@ -293,10 +298,12 @@ pub mod pallet {
     #[pallet::hooks]
     impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
         fn on_finalize(n: T::BlockNumber) {
+            // 10 blocks are hardcoded for simplification but can be any value chosen by the governance
             if n % 10u8.into() == frame_support::sp_runtime::traits::Zero::zero() {
                 for who in <StakedTimes<T>>::iter_keys() {
                     if <StakedTimes<T>>::get(&who).is_some() {
                         let pot_address = Self::account_id();
+                        let amount = T::StakedToken::free_balance(&who).
                         let _ = T::StakedToken::transfer(
                             &pot_address,
                             &who,
@@ -311,7 +318,6 @@ pub mod pallet {
     }
 
     impl<T: Config> Pallet<T> {
-        /// get voting pot address to deposit slashed tokens to and take rewards from
         pub fn account_id() -> T::AccountId {
             T::PalletId::get().into_account_truncating()
         }
